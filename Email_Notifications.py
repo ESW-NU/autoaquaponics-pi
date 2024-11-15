@@ -143,7 +143,7 @@ def main():
     
     # Add test data after a short delay
     time.sleep(5)
-    add_test_data(db)
+    # add_test_data(db)
 
     # Keep the main thread alive
     try:
