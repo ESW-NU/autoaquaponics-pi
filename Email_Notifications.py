@@ -7,6 +7,7 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import firestore
 from dotenv import load_dotenv
+import requests 
 
 # Load environment variables from .env file
 load_dotenv()
@@ -20,6 +21,7 @@ db = firestore.client()
 # Email configuration
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+SLACK_MESSAGE_ENDPOINT = os.getenv('SLACK_MESSAGE_ENDPOINT')
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
 
@@ -39,6 +41,10 @@ def send_email(recipient, subject, body):
         print(f"Email sent successfully to {recipient}")
     except Exception as e:
         print(f"Failed to send email to {recipient}. Error: {str(e)}")
+
+def send_slack_msg(text):
+    myobj = {"text": text}
+    requests.post(SLACK_MESSAGE_ENDPOINT, json = myobj)
 
 def get_tolerances():
     """Retrieve tolerances from Firebase."""
@@ -105,6 +111,7 @@ def handle_sensor_update(doc_snapshot, changes, read_time):
             
             for recipient in recipients:
                 send_email(recipient, subject, body)
+            send_slack_msg(body)
         else:
             print("No alerts generated for this update")
 
