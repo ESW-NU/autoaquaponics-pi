@@ -9,7 +9,7 @@ from firebase_admin import firestore
 from dotenv import load_dotenv
 import requests
 from logs import global_logger
-import threading
+from main import Task
 
 # Load environment variables from .env file
 load_dotenv()
@@ -110,7 +110,7 @@ def _handle_sensor_update(doc_snapshot, changes, read_time):
             return
 
         alerts = _check_tolerances(sensor_data, tolerances)
-        if alerts:
+        if alerts and False:
             recipients = _get_notification_recipients()
             subject = "Aquaponics System Alert"
             body = "The following issues were detected:\n\n" + "\n".join(alerts)
@@ -121,19 +121,17 @@ def _handle_sensor_update(doc_snapshot, changes, read_time):
         else:
             global_logger.info("no alerts generated for this update")
 
-def main(stop_event: threading.Event):
-    """Run a real-time listener for sensor data updates. Doesn't return until
-    stop_event is set."""
-    global_logger.info("starting real-time monitoring of sensor data")
+class Notifs(Task):
+    def start(self):
+        global_logger.info("starting real-time monitoring of sensor data")
+        stats_ref = db.collection('stats')
+        query = stats_ref.order_by("unix_time", direction=firestore.Query.DESCENDING).limit(1)
+        self.watch = query.on_snapshot(_handle_sensor_update)
+        global_logger.info("set up Firebase snapshot listener")
 
-    stats_ref = db.collection('stats')
-    query = stats_ref.order_by("unix_time", direction=firestore.Query.DESCENDING).limit(1)
-    watch = query.on_snapshot(_handle_sensor_update)
-    global_logger.info("set up Firebase snapshot listener")
-
-    stop_event.wait()
-    global_logger.info("received stop event; stopping Firebase snapshot listener")
-    watch.unsubscribe()
+    def stop(self):
+        global_logger.info("received stop event; stopping Firebase snapshot listener")
+        self.watch.unsubscribe()
 
 def add_test_data(db):
     """Add test data to Firestore to simulate out-of-range readings."""
@@ -150,9 +148,9 @@ def add_test_data(db):
     global_logger.info(f"added: {test_data}")
 
 if __name__ == "__main__":
-    stop_event = threading.Event()
+    notifs = None
     try:
-        main(stop_event)
+        notifs = Notifs().start()
     except KeyboardInterrupt:
         global_logger.info("received keyboard interrupt")
-        stop_event.set()
+        notifs.stop()
