@@ -98,40 +98,47 @@ def _get_notification_recipients():
     global_logger.debug(f"notification recipients: {recipients}")
     return recipients
 
-def _handle_sensor_update(doc_snapshot, changes, read_time):
-    """Handle real-time updates to sensor data."""
-    global_logger.debug("received sensor update")
-    for doc in doc_snapshot:
-        sensor_data = doc.to_dict()
-        global_logger.debug(f"processing sensor data: {sensor_data}")
-        tolerances = _get_tolerances()
-        if not tolerances:
-            global_logger.info("no tolerances defined")
-            return
-
-        alerts = _check_tolerances(sensor_data, tolerances)
-        if alerts and False:
-            recipients = _get_notification_recipients()
-            subject = "Aquaponics System Alert"
-            body = "The following issues were detected:\n\n" + "\n".join(alerts)
-
-            for recipient in recipients:
-                _send_email(recipient, subject, body)
-            _send_slack_msg(body)
-        else:
-            global_logger.info("no alerts generated for this update")
-
 class Notifs(Task):
+    def __init__(self):
+        self.watch = None
+        self.first_time = True
+
     def start(self):
         global_logger.info("starting real-time monitoring of sensor data")
         stats_ref = db.collection('stats')
         query = stats_ref.order_by("unix_time", direction=firestore.Query.DESCENDING).limit(1)
-        self.watch = query.on_snapshot(_handle_sensor_update)
+        self.watch = query.on_snapshot(self._handle_sensor_update)
         global_logger.info("set up Firebase snapshot listener")
 
     def stop(self):
         global_logger.info("received stop event; stopping Firebase snapshot listener")
         self.watch.unsubscribe()
+
+    def _handle_sensor_update(self, doc_snapshot, changes, read_time):
+        """Handle real-time updates to sensor data."""
+        global_logger.debug("received sensor update")
+        for doc in doc_snapshot:
+            sensor_data = doc.to_dict()
+            global_logger.debug(f"processing sensor data: {sensor_data}")
+            tolerances = _get_tolerances()
+            if not tolerances:
+                global_logger.info("no tolerances defined")
+                return
+
+            alerts = _check_tolerances(sensor_data, tolerances)
+            if alerts:
+                recipients = _get_notification_recipients()
+                subject = "Aquaponics System Alert"
+                body = "The following issues were detected:\n\n" + "\n".join(alerts)
+
+                global_logger.info(f"alerts generated for this update: {repr(body)}")
+                if not self.first_time:
+                    for recipient in recipients:
+                        _send_email(recipient, subject, body)
+                    _send_slack_msg(body)
+            else:
+                global_logger.info("no alerts generated for this update")
+            self.first_time = False
 
 def add_test_data(db):
     """Add test data to Firestore to simulate out-of-range readings."""
