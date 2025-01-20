@@ -3,4 +3,4 @@ __pycache__/
 .env
 firebase_service_account_key.json
 ESW
-autoaquaponics.log
+*.log

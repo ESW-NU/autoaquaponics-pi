@@ -1,76 +1,50 @@
 from logs import global_logger
 import threading
+import time
+import code
+from importlib import reload
 
 """
 Main script for AutoAquaponics system.
 
-This script initializes and runs various tasks required for the AutoAquaponics
-system. It includes functionality to start and stop tasks, as well as an
-interactive REPL for debugging.
+This script contains a Task class that can be used to run tasks in separate
+threads. The script starts a REPL that can be used to manage these tasks.
 
-# Important Functions
-
-    stop_task(task_name: str) -> None:
-        Stops a running task by its name. Logs the stopping of the task.
-
-    run_tasks() -> None:
-        Initializes and starts all required tasks. Logs the start of tasks or
-        any errors encountered.
-
-    repl() -> None:
-        Starts an interactive REPL for debugging. Logs any errors encountered
-        and the exit of the REPL.
-
-# Execution Flow
-
-    The script starts by logging the start of the main script. It then runs the
-    required tasks and starts the REPL. Any exceptions during the execution are
-    logged. Finally, it logs the shutdown of the script.
+To create a task, use the REPL to import the desired module, e.g. `import
+notifs`, which must have a valid `main` function. Then, create a task using the
+Task constructor: `task_notifs = Task(notifs)`. In addition to storing the
+resulting task object in a variable, the task will be added to the
+`Task.instances` list. To stop a task, call the `stop` method on the task
+object, e.g. `task_notifs.stop()`. To hot-swap a running module, use
+`reload(<module>)`, and start the task again. It is recommended to stop an
+existing task using a module before reloading the module.
 """
 
-def notifs():
-    try:
-        import notifs
-        stop = threading.Event()
-        thread = threading.Thread(target=notifs.main, args=(stop,))
-        thread.start()
-        return stop, thread
-    except Exception as e:
-        global_logger.error(f"error starting notifications task: {str(e)}", exc_info=True)
+class Task:
+    instances = []
 
-tasks = {}
+    def __init__(self, module):
+        self.start_time = time.time()
+        self.module = module
+        self.stop_event = threading.Event()
+        self.thread = threading.Thread(target=module.main, args=(self.stop_event,))
+        self.thread.start()
+        Task.instances.append(self)
+        global_logger.info(f"started task: {self}")
 
-def stop_task(task_name):
-	stop_event, thread = tasks[task_name]
-	stop_event.set()
-	thread.join()
-	global_logger.info(f"stopped task '{task_name}'")
+    def stop(self):
+        self.stop_event.set()
+        self.thread.join()
+        Task.instances.remove(self)
+        global_logger.info(f"stopped task: {self}")
 
-def run_tasks():
-	try:
-		notifs_stop, notifs_thread = notifs()
-		tasks["notifs"] = notifs_stop, notifs_thread
-
-		global_logger.info("started tasks")
-	except Exception as e:
-		global_logger.error(f"error running tasks: {str(e)}", exc_info=True)
-
-def repl():
-	try:
-		import code
-		code.InteractiveConsole(locals=globals()).interact()
-	except Exception as e:
-		global_logger.error(f"error in REPL: {str(e)}", exc_info=True)
-	finally:
-		global_logger.info("exited REPL")
+    def __repr__(self):
+        return f"Task(module={self.module.__name__}, thread={self.thread.name}, start_time={self.start_time})"
 
 try:
-	global_logger.info("starting main script")
-
-	run_tasks()
-
-	repl()
+    global_logger.info("starting main script")
+    code.InteractiveConsole(locals={"Task": Task, "reload": reload}).interact()
 except Exception as e:
-	global_logger.error(f"error in main script: {str(e)}", exc_info=True)
+    global_logger.error(f"error in main: {str(e)}", exc_info=True)
 finally:
-	global_logger.info("shutting down")
+    global_logger.info("shutting down")

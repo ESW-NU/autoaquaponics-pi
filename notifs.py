@@ -134,7 +134,6 @@ def main(stop_event: threading.Event):
     stop_event.wait()
     global_logger.info("received stop event; stopping Firebase snapshot listener")
     watch.unsubscribe()
-    print("finished")
 
 def add_test_data(db):
     """Add test data to Firestore to simulate out-of-range readings."""
