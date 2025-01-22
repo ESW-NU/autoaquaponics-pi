@@ -19,8 +19,8 @@ import glob
 
 
 #initialize GPIO pins for TDS sensor switch + distance sensor
-pin_num = 17
-pin_num2 = 27
+pin_num = 07
+pin_num2 = 14
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
