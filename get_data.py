@@ -56,21 +56,21 @@ def get_data(last_distance, last_wtemp, last_hum, last_atemp):  #main function t
     if wtemp == np.nan:  #use last wtemp value if it's NaN
         TDS = get_tds(last_wtemp)
     else:
-        TDS = get_tds(wtemp)        
+        TDS = get_tds(wtemp)
     GPIO.output(pin_num,GPIO.LOW)  #turn TDS sensor off
     sleep(0.5)
-    
+
     #define readings from ADC
     pH = -5.82*chan.voltage + 22.1  #calibrated equation
     pH = pH/3  #wrong thing
     #pH = chan.voltage
-    
+
     #read air temp and air humidity
     atemp, hum = get_dht()
     if type(hum) != float or type(atemp) != float:
         hum, atemp = last_hum, last_atemp
     distance = 58.42 - get_distance(last_distance)
-    
+
     #read flow rate
     #flow1 = get_flow_rate(12, 4.8)
     #flow2 = get_flow_rate(13, 0.273)
@@ -101,7 +101,7 @@ def get_water_temp():
                 return temp_c
             break
     return np.nan
-        
+
 #TDS sensor function
 def get_tds(wtemp):
     Vtds_raw = chan1.voltage        #raw reading from sensor right now
@@ -144,16 +144,16 @@ def get_distance(last_distance):  #output distance in cm
     GPIO_ECHO = 18
     GPIO.setup(GPIO_TRIGGER, GPIO.OUT)  #set GPIO direction (IN / OUT)
     GPIO.setup(GPIO_ECHO, GPIO.IN)
-    
+
     # set Trigger to HIGH
     StopTime = time.time()
     GPIO.output(GPIO_TRIGGER, True)
-    
+
     # set Trigger after 0.01ms to LOW
     time.sleep(0.00006)
     GPIO.output(GPIO_TRIGGER, False)
     StartTime = time.time()
-    
+
     # save StartTime
     while GPIO.input(GPIO_ECHO) == 0:
         pass
@@ -162,15 +162,15 @@ def get_distance(last_distance):  #output distance in cm
             new_reading = True
             break
     StartTime = time.time()
-    
+
     # save time of arrival
     while GPIO.input(GPIO_ECHO) == 1:
         pass
     StopTime = time.time()
-    
+
     # time difference between start and arrival
     TimeElapsed = StopTime - StartTime
-    
+
     # multiply with the sonic speed (34300 cm/s) and divide by 2, because there and back
     if new_reading:
         return last_distance
@@ -187,7 +187,7 @@ def get_distance(last_distance):  #output distance in cm
 #         global count
 #         if start_counter == 1:
 #             count = count+1
-    
+
 #     GPIO.add_event_detect(FLOW_SENSOR_GPIO, GPIO.FALLING, callback=countPulse)
 
 #     try:
@@ -199,7 +199,7 @@ def get_distance(last_distance):  #output distance in cm
 #         print("The count is: " + str(count))
 #         count = 0
 #         time.sleep(0.1)
-    
+
 #     except KeyboardInterrupt:
 #         print('\nkeyboard interrupt!')
 #         GPIO.cleanup()

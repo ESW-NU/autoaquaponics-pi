@@ -52,7 +52,7 @@ def snap(doc_snapshot, col_name, doc_name):
         ble.BLE_lights_mode(i, mode)
         if mode == 'timer':
             ble.BLE_lights_duration(i, doc['starthh'], doc['startmm'], doc['durationhh'], doc['durationmm'], doc['meridiem'])
-    
+
     elif col_name == 'water-pump':
         if doc_name == 'status':
             ble.BLE_pump_mode(doc['status'])
@@ -83,11 +83,10 @@ doc = ref.on_snapshot(lambda doc_snapshot, changes, read_time: snap(doc_snapshot
 ref = db.collection('water-pump').document('bed-B')
 doc = ref.on_snapshot(lambda doc_snapshot, changes, read_time: snap(doc_snapshot, 'water-pump', 'bed-B'))
 
-    
+
 def find_next_log_time(x, base):
     maybe = base * round(x/base)
     if maybe < x:
-        return maybe + base
     return maybe
 
 def DataLogger():
@@ -97,18 +96,18 @@ def DataLogger():
     atemp = np.nan
     curr_time = round(time.time())
     time_to_log = find_next_log_time(curr_time, LOG_EVERY * 60)
-    
+
     while True:
         pH, TDS, hum, atemp, wtemp, distance = np.round(get_data(distance, wtemp, hum, atemp), 2)
         curr_time = round(time.time())
         if curr_time <= time_to_log:
             continue
         curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance)
-        
+
         data_as_dict = {}
         for i in range(len(curr_data)):
             data_as_dict[sensors[i]] = curr_data[i]
         db.collection(u'stats').add(data_as_dict)
         time_to_log = find_next_log_time(curr_time, LOG_EVERY * 60)
-       
+
 DataLogger()
