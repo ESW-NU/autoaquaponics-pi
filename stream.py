@@ -1,5 +1,5 @@
 import subprocess
-from logs import global_logger
+from logs import global_logger, setup_logger
 from main import Task
 
 """
@@ -8,9 +8,11 @@ device into a stream. The stream is output as HLS segments and a manifest file
 for use in a web player.
 """
 
+stream_logger = setup_logger("stream.log", "Stream Encoder")
+
 class Stream(Task):
-    def __init__(self, stream_data_output_dir="output", device_path="/dev/video0", ffmpeg_log="ffmpeg.log"):
-        self.ffmpeg_log = open(ffmpeg_log, "a")
+    def __init__(self, stream_data_output_dir="output", device_path="/dev/video0", stream_logger=stream_logger):
+        self.stream_logger = stream_logger
         self.ffmpeg_command = [
             "ffmpeg",
             "-f", "v4l2",
@@ -38,7 +40,9 @@ class Stream(Task):
 
     def start(self):
         global_logger.info(f"starting stream encoding with command: {' '.join(self.ffmpeg_command)}")
-        self.ffmpeg_process = subprocess.Popen(self.ffmpeg_command, stdout=subprocess.DEVNULL, stderr=self.ffmpeg_log)
+        self.ffmpeg_process = subprocess.Popen(self.ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        for line in self.ffmpeg_process.stderr:
+            self.stream_logger.info(line.decode("utf-8").strip())
 
     def stop(self):
         global_logger.info("stopping stream encoding")
