@@ -8,7 +8,7 @@ device into a stream. The stream is output as HLS segments and a manifest file
 for use in a web player.
 """
 
-stream_logger = setup_logger("stream.log", "Stream Encoder")
+stream_logger = setup_logger("logs/stream.log", "Stream Encoder")
 
 class Stream(Task):
     def __init__(self, stream_data_output_dir="output", device_path="/dev/video0", stream_logger=stream_logger):

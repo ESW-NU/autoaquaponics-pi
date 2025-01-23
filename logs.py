@@ -33,6 +33,6 @@ def setup_logger(log_file, subsystem_name):
 
     return logger
 
-_global_log_file = "autoaquaponics.log"
+_global_log_file = "logs/autoaquaponics.log"
 global_logger = setup_logger(_global_log_file, "AutoAquaponics System")
 global_logger.info("logger setup complete")
