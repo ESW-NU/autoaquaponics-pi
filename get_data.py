@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import time
 from time import sleep
+import json
 
 #import necessary modules for I2C
 import board
@@ -45,9 +46,20 @@ ads.gain = 2/3
 #single ended mode read for pin 0 and 1
 chan = AnalogIn(ads, ADS.P0)
 chan1 = AnalogIn(ads, ADS.P1)
+chan2 = AnalogIn(ads, ADS.P2) # TODO: will do sensor be wired to ADC?
 
+# dissolved oxygen sensor constants
+# TODO double check VREF and ADC_RES values
+VREF = 5000 # VREF (mv)
+ADC_RES = 1024 # ADC Resolution
+# saturation dissolved oxygen concentrations at various temperatures
+do_table = [14460, 14220, 13820, 13440, 13090, 12740, 12420, 12110, 11810, 11530,
+            11260, 11010, 10770, 10530, 10300, 10080, 9860, 9660, 9460, 9270,
+            9080, 8900, 8730, 8570, 8410, 8250, 8110, 7960, 7820, 7690,
+            7560, 7430, 7300, 7180, 7070, 6950, 6840, 6730, 6630, 6530, 6410]
 
-def get_data(last_distance, last_wtemp, last_hum, last_atemp):  #main function that calls on all other functions to generate data list
+# main function that calls on all other functions to generate data list
+def get_data(last_distance, last_wtemp, last_hum, last_atemp, last_do, do_cal1_v, do_cal1_t):
     #read w1 water temp sensor
     wtemp = get_water_temp()
     GPIO.output(pin_num,GPIO.HIGH)  #turn TDS sensor on
@@ -71,11 +83,16 @@ def get_data(last_distance, last_wtemp, last_hum, last_atemp):  #main function t
         hum, atemp = last_hum, last_atemp
     distance = 58.42 - get_distance(last_distance)
 
+    # read dissolved oxygen sensor
+    do = get_do(do_cal1_v, do_cal1_t, wtemp)
+    if is_nan(do):
+        do = last_do
+
     #read flow rate
     #flow1 = get_flow_rate(12, 4.8)
     #flow2 = get_flow_rate(13, 0.273)
 
-    return pH, TDS, hum, atemp, wtemp, distance  #, flow1, flow2
+    return pH, TDS, hum, atemp, wtemp, distance, do  #, flow1, flow2
 
 #DS18B20 functions
 def read_temp_raw():
@@ -176,6 +193,71 @@ def get_distance(last_distance):  #output distance in cm
         return last_distance
     else:
         return (TimeElapsed * 34300)/2
+
+# Dissolved Oxygen Sensor (SKU:SEN0237) functions
+
+# Based on the following arduino code
+    # https://wiki.dfrobot.com/Gravity__Analog_Dissolved_Oxygen_Sensor_SKU_SEN0237#target_3
+def get_do(cal1_v, cal1_t, wtemp_c):
+    V_saturation = cal1_v + 35 * wtemp_c - cal1_t * 35
+    voltage_mv = get_do_voltage()
+    do_ug_l = voltage_mv * do_table[wtemp_c] / V_saturation # micrograms per liter
+    return do_ug_l / 1000 # milligrams per liter
+
+def read_do_raw():
+    # TODO: is this how to analog read for do sensor
+    return chan2.voltage
+
+def get_do_voltage():
+    return read_do_raw() * VREF / ADC_RES
+
+# returns if do sensor has been calibrated in the last month
+def is_do_calibrated(curr_time):
+    with open("do_calibration.json", "r") as f:
+        do_calib_data = json.load(f)
+    last_time = do_calib_data["last_calibrated_time"]
+    # the internet recommends callibrating the SEN0237 sensor monthly
+    if not last_time:
+        return False
+    sec_per_month = 60*60*24*30
+    time_elapsed = curr_time - last_time
+    print(curr_time, last_time, time_elapsed, sec_per_month)
+    print(time_elapsed > sec_per_month)
+    print(type(time_elapsed), type(sec_per_month))
+    return time_elapsed < sec_per_month
+
+def calibrate_do():
+    input("""
+        Please calibrate the dissolved oxygen sensor, which should be done at least monthly. See details on the single-point calibration steps (https://wiki.dfrobot.com/Gravity__Analog_Dissolved_Oxygen_Sensor_SKU_SEN0237#target_3). Here are quickstart instructions to callibrate the SEN0237 dissolved oxygen sensor:
+        \t1. Prepare the probe
+        \t2. Wet the probe in pure water and shake off excess water drops
+        \t3. Expose the probe to the air and maintain proper air flow (do not use a fan to blow)
+        \t4. Press any key to start data collection
+        \t5. After the output voltage is stable (about 1 min), record the voltage, which is the saturated dissolved oxygen voltage at the current temperature
+        \t6. Exit data collection with CTRL+C and enter the voltage
+        """)
+    # get sensor readings from do (voltage) and dht (air temperature)
+    try:
+        while True:
+            voltage = get_do_voltage()
+            raw = read_do_raw()
+            print(f"Raw: {raw} \tVoltage(mv): {voltage}")
+    except KeyboardInterrupt:
+        cal_v = input("\nEnter stable voltage (mv): ")
+        atemp, hum = get_dht()
+        if is_nan(atemp):
+            atemp = input("Unable to get valid air temperature reading, please enter a value.\n Air temp (C): ")
+        else:
+            print(f"Proceeding with measured air temperature value of {atemp}")
+        # update calibration values in json file
+        with open("do_calibration.json", "r") as f:
+            data = json.load(f)
+        data["CAL1_V"] = cal_v
+        data["CAL1_T"] = atemp
+        data["last_calibrated_time"] = round(time.time())
+        with open("do_calibration.json", "w") as f:
+            json.dump(data, f)
+        print("calibration values saved to file!")
 
 # def get_flow_rate(FLOW_SENSOR_GPIO, k):
 #     GPIO.setmode(GPIO.BCM)

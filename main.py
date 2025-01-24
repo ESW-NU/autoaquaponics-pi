@@ -2,6 +2,7 @@
 import argparse
 import numpy as np
 import time
+import json
 
 import firebase_admin
 from firebase_admin import credentials
@@ -9,7 +10,7 @@ from firebase_admin import firestore
 
 from ble import BLE
 from ble import FakeBLE
-from get_data import get_data
+from get_data import get_data, calibrate_do, is_do_calibrated
 
 parser = argparse.ArgumentParser(description="This script can be run with the following arguments:",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -87,21 +88,32 @@ doc = ref.on_snapshot(lambda doc_snapshot, changes, read_time: snap(doc_snapshot
 def find_next_log_time(x, base):
     maybe = base * round(x/base)
     if maybe < x:
+        return maybe + base
     return maybe
 
 def DataLogger():
+    curr_time = round(time.time())
+    # read dissolved oxygen sensor callibration data
+    if not is_do_calibrated(curr_time):
+        calibrate_do()
+    with open("do_calibration.json", "r") as f:
+        do_calib_data = json.load(f)
+    do_cal1_v = float(do_calib_data["CAL1_V"])
+    do_cal1_t = float(do_calib_data["CAL1_T"])
+
     distance = np.nan  #to give an arbitrary initial value to getData for the first time the distance sensor fails
     wtemp = 21  #arbitrary initial value
     hum = np.nan
     atemp = np.nan
-    curr_time = round(time.time())
+    do = np.nan
     time_to_log = find_next_log_time(curr_time, LOG_EVERY * 60)
 
     while True:
-        pH, TDS, hum, atemp, wtemp, distance = np.round(get_data(distance, wtemp, hum, atemp), 2)
+        pH, TDS, hum, atemp, wtemp, distance, do = np.round(get_data(distance, wtemp, hum, atemp, do, do_cal1_v, do_cal1_t), 2)
         curr_time = round(time.time())
         if curr_time <= time_to_log:
             continue
+        # TODO: configure dissolved oxygen in firebase and write readings to database
         curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance)
 
         data_as_dict = {}
