@@ -67,6 +67,16 @@ if __name__ == "__main__":
     try:
         global_logger.info("starting main script")
         atexit.register(TaskHandle.stop_all)
+
+        # start tasks
+        import stream
+        stream_task = TaskHandle(stream.Stream())
+        import server
+        server_task = TaskHandle(server.Server())
+        import notifs
+        notifs_task = TaskHandle(notifs.Notifs())
+
+        # enter interactive REPL to allow management and hot-reloading
         code.InteractiveConsole(locals={"TaskHandle": TaskHandle, "reload": reload}).interact()
     except Exception as e:
         global_logger.error(f"error in main: {str(e)}", exc_info=True)

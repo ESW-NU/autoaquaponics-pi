@@ -113,6 +113,8 @@ class Notifs(Task):
     def stop(self):
         global_logger.info("received stop event; stopping Firebase snapshot listener")
         self.watch.unsubscribe()
+        # you may still get a "Background thread did not exit" message if the
+        # listener thread hadn't stopped yet. this is okay.
 
     def _handle_sensor_update(self, doc_snapshot, changes, read_time):
         """Handle real-time updates to sensor data."""
