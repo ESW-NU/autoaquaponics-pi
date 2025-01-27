@@ -46,12 +46,11 @@ ads.gain = 2/3
 #single ended mode read for pin 0 and 1
 chan = AnalogIn(ads, ADS.P0)
 chan1 = AnalogIn(ads, ADS.P1)
-chan2 = AnalogIn(ads, ADS.P2) # TODO: will do sensor be wired to ADC?
+chan2 = AnalogIn(ads, ADS.P2) # TODO: is this the right ADC pin?
 
 # dissolved oxygen sensor constants
-# TODO double check VREF and ADC_RES values
-VREF = 5000 # VREF (mv)
-ADC_RES = 1024 # ADC Resolution
+VREF = 5000 # VREF (mv) // TODO: should this be 5V or 3.3V
+ADC_RES = 65535 # ADC Resolution is 16 bits
 # saturation dissolved oxygen concentrations at various temperatures
 do_table = [14460, 14220, 13820, 13440, 13090, 12740, 12420, 12110, 11810, 11530,
             11260, 11010, 10770, 10530, 10300, 10080, 9860, 9660, 9460, 9270,
@@ -195,19 +194,21 @@ def get_distance(last_distance):  #output distance in cm
         return (TimeElapsed * 34300)/2
 
 # Dissolved Oxygen Sensor (SKU:SEN0237) functions
-
 # Based on the following arduino code
     # https://wiki.dfrobot.com/Gravity__Analog_Dissolved_Oxygen_Sensor_SKU_SEN0237#target_3
+
+# read sensor and convert to mg/L dissolved oxygen
 def get_do(cal1_v, cal1_t, wtemp_c):
     V_saturation = cal1_v + 35 * wtemp_c - cal1_t * 35
     voltage_mv = get_do_voltage()
     do_ug_l = voltage_mv * do_table[wtemp_c] / V_saturation # micrograms per liter
     return do_ug_l / 1000 # milligrams per liter
 
+# returns raw reading from do sensor
 def read_do_raw():
-    # TODO: is this how to analog read for do sensor
     return chan2.voltage
 
+# returns converted voltage from do sensor
 def get_do_voltage():
     return read_do_raw() * VREF / ADC_RES
 
@@ -226,13 +227,14 @@ def is_do_calibrated(curr_time):
     print(type(time_elapsed), type(sec_per_month))
     return time_elapsed < sec_per_month
 
+# calibrate do sensor by printing instructions, reading the sensor, and saving user-provided value to file
 def calibrate_do():
     input("""
         Please calibrate the dissolved oxygen sensor, which should be done at least monthly. See details on the single-point calibration steps (https://wiki.dfrobot.com/Gravity__Analog_Dissolved_Oxygen_Sensor_SKU_SEN0237#target_3). Here are quickstart instructions to callibrate the SEN0237 dissolved oxygen sensor:
         \t1. Prepare the probe
         \t2. Wet the probe in pure water and shake off excess water drops
         \t3. Expose the probe to the air and maintain proper air flow (do not use a fan to blow)
-        \t4. Press any key to start data collection
+        \t4. Press any key to continue this script and start data collection
         \t5. After the output voltage is stable (about 1 min), record the voltage, which is the saturated dissolved oxygen voltage at the current temperature
         \t6. Exit data collection with CTRL+C and enter the voltage
         """)
@@ -242,6 +244,7 @@ def calibrate_do():
             voltage = get_do_voltage()
             raw = read_do_raw()
             print(f"Raw: {raw} \tVoltage(mv): {voltage}")
+            time.sleep(0.1)
     except KeyboardInterrupt:
         cal_v = input("\nEnter stable voltage (mv): ")
         atemp, hum = get_dht()
