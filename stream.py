@@ -11,7 +11,7 @@ for use in a web player.
 stream_logger = setup_logger("logs/stream.log", "Stream Encoder")
 
 class Stream(Task):
-    def __init__(self, stream_data_output_dir="output", device_path="/dev/video0", stream_logger=stream_logger):
+    def __init__(self, stream_data_output_dir="stream_output", device_path="/dev/video0", stream_logger=stream_logger):
         self.stream_logger = stream_logger
         self.ffmpeg_command = [
             "ffmpeg",
