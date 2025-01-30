@@ -30,7 +30,7 @@ time.sleep(2)
 ble = BLE() if REAL_BLE else FakeBLE()
 ble.BLE_init()
 
-sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
+sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance', 'dissolved_oxygen')
 cred = credentials.Certificate("../Desktop/serviceAccountKey.json")
 app = firebase_admin.initialize_app(cred)
 
@@ -113,8 +113,7 @@ def DataLogger():
         curr_time = round(time.time())
         if curr_time <= time_to_log:
             continue
-        # TODO: configure dissolved oxygen in firebase and write readings to database
-        curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance)
+        curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance, do)
 
         data_as_dict = {}
         for i in range(len(curr_data)):
