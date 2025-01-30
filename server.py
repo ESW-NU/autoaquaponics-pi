@@ -67,23 +67,13 @@ class CustomRequestHandler(BaseHTTPRequestHandler):
             if mime_type is not None:
                 self.send_header("Content-Type", mime_type)
             self.send_header("Content-Length", str(file_stats.st_size))
+            self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
 
             shutil.copyfileobj(file, self.wfile)
         except:
             file.close()
             raise
-
-    def serve_file(self, file_path):
-        if os.path.isfile(file_path):
-            self.send_response(200)
-            self.send_header("Content-Type", "application/octet-stream")
-            self.send_header("Content-Length", str(os.path.getsize(file_path)))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-
-            with open(file_path, "rb") as file:
-                shutil.copyfileobj(file_path, self.wfile)
 
     def log_message(self, format, *args):
         server_logger.info(format % args)
