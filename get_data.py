@@ -19,19 +19,25 @@ import glob
 
 
 #initialize GPIO pins for TDS sensor switch + distance sensor
-pin_num = 17
-pin_num2 = 27
+pin_num_TDS = 07
+pin_num_Dis = 14
 
+# "GPIO.BCM" - Broadcom SOC channel numbers; "GPIO.BOARD" - physical pin headers on Pi
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
-GPIO.setup(pin_num,GPIO.OUT)
-GPIO.setup(pin_num2,GPIO.OUT)
+GPIO.setup(pin_num_TDS,GPIO.OUT)
+GPIO.setup(pin_num_Dis,GPIO.OUT)
 
 # initialize I2C bus
+# I2C - comm protocol. SCL - clock line, synchronizes comm between master (Pi) and slave (sensor) device
+# board.SDA - pin designated as the I2C data line
 i2c = busio.I2C(board.SCL, board.SDA)
 
+# Variable of DHT22 (best of DHT family) sensor object. Board.D14 - pin where DHT connected. 
+# Sensor class of adafruit DHT library. Considering use pulseio for temperature readings. 
 dhtDevice = adafruit_dht.DHT22(board.D14, use_pulseio=False)
 
+# To do: figure out what device this is for
 base_dir = '/sys/bus/w1/devices/'
 try:
     device_folder = glob.glob(base_dir + '28*')[0]
@@ -40,13 +46,15 @@ except:
     device_file = None
 
 #create ADS object
+# gain determines the precision of the voltage being read - this gain is pretty low
+
 ads = ADS.ADS1115(i2c)
 ads.gain = 2/3
-#single ended mode read for pin 0 and 1
-chan = AnalogIn(ads, ADS.P0)
-chan1 = AnalogIn(ads, ADS.P1)
+#single ended mode read for pin 0 and 1. "ground" is the relative measure (0), chan1 is one of the ones being measured
+ground = AnalogIn(ads, ADS.P0)
+raw_tds_chan1 = AnalogIn(ads, ADS.P1)
 
-
+# working backwards
 def get_data(last_distance, last_wtemp, last_hum, last_atemp):  #main function that calls on all other functions to generate data list
     #read w1 water temp sensor
     wtemp = get_water_temp()
@@ -61,9 +69,9 @@ def get_data(last_distance, last_wtemp, last_hum, last_atemp):  #main function t
     sleep(0.5)
     
     #define readings from ADC
-    pH = -5.82*chan.voltage + 22.1  #calibrated equation
+    pH = -5.82*ground.voltage + 22.1  #calibrated equation
     pH = pH/3  #wrong thing
-    #pH = chan.voltage
+    #pH = ground.voltage
     
     #read air temp and air humidity
     atemp, hum = get_dht()
@@ -77,46 +85,53 @@ def get_data(last_distance, last_wtemp, last_hum, last_atemp):  #main function t
 
     return pH, TDS, hum, atemp, wtemp, distance  #, flow1, flow2
 
-#DS18B20 functions
+# Temperature sensor (DS18B20) functions
+#change wording later if applicable 
 def read_temp_raw():
     try:
-        f = open(device_file, 'r')
+        temp_data = open(device_file, 'r')
     except:
         return []
-    lines = f.readlines()
-    f.close()
+    lines = temp_data.readlines()
+    temp_data.close()
     return lines
 
+# Runs 5 attempts to read the temp file - if valid data isn't found (looks for 'YES' at the end of a line), it tries again
+# np.nan means not a number - returns "nan"
 def get_water_temp():
-    for _ in range(5):
+    for attempts in range(5):
         lines = read_temp_raw()
         if len(lines) > 0:  #only index below if lines is not empty
             while lines[0].strip()[-3:] != 'YES':
                 time.sleep(0.2)
                 lines = read_temp_raw()
-            equals_pos = lines[1].find('t=')
-            if equals_pos != -1:
-                temp_string = lines[1][equals_pos+2:]
+		# finds where the temp value is; temp_string +2 because that's the precision we're reading 
+            temp_value_pos = lines[1].find('t=')
+            if temp_value_pos != -1:
+                temp_string = lines[1][temp_value_pos+2:]
                 temp_c = float(temp_string) / 1000.0
                 return temp_c
             break
     return np.nan
         
 #TDS sensor function
+
 def get_tds(wtemp):
-    Vtds_raw = chan1.voltage        #raw reading from sensor right now
-    TheoEC = 684                    #theoretical EC of calibration fluid
-    Vc = 1.085751885                #v reading of sensor when calibrating
+    Vtds_raw = raw_tds_chan1.voltage        #raw reading from sensor right now
+    TheoEC = 684                    #theoretical EC (electrical conductivity) of calibration fluid (calibrated with 342 ppm of aqueous NaCl)
+    Vc = 1.085751885                #voltage reading of sensor when calibrating
     temp_calibrate = 23.25          #measured water temp when calibrating
     rawECsol = TheoEC*(1+0.02*(temp_calibrate-25))  #temp compensate the calibrated values
-    K = (rawECsol)/(133.42*(Vc**3)-255.86*(Vc**2)+857.39*Vc)  #defined calibration factor K
+    K = (rawECsol)/(133.42*(Vc**3)-255.86*(Vc**2)+857.39*Vc)  #defined calibration factor K for NaCl (this will have to be readjusted for specific solution in tank)
     EC_raw = K*(133.42*(Vtds_raw**3)-255.86*(Vtds_raw**2)+857.39*Vtds_raw)
     EC = EC_raw/(1+0.02*(wtemp-25)) #use current temp for temp compensation
     TDS = EC/2                      #TDS is just half of electrical conductivity in ppm
     return TDS
 
+
 #DHT function
 def get_dht():
+#Define temperature and humidity
     temperature_c = np.nan
     humidity = np.nan
     while is_nan(temperature_c) or is_nan(humidity):  #test to see if the value is still nan
@@ -125,11 +140,12 @@ def get_dht():
             temperature_c = dhtDevice.temperature
             humidity = dhtDevice.humidity
         except RuntimeError as error:
-            # Errors happen fairly often, DHT's are hard to read, just keep going
+            # Errors happen fairly often, DHT's are hard to read. Sets to NaN to restart the function.
             temperature_c = float('NaN')
             humidity = float('NaN')
         except Exception as error:
-            dhtDevice.exit()
+# If unexpected error, release resources used by the sensor and notifies caller
+            dhtDevice.exit() 
             raise error
     return temperature_c, humidity
 
@@ -138,32 +154,32 @@ def is_nan(x):  #used in DHT function
 
 def get_distance(last_distance):  #output distance in cm
     #setup distance sensing
-    new_reading = False
-    counter = 0
-    GPIO_TRIGGER = 6  #set GPIO Pins
-    GPIO_ECHO = 18
+    new_reading = False # Flag to indicate a valid measurement
+    counter = 0 #Retry attempts on failed readings
+    GPIO_TRIGGER = 6  #set GPIO Pins. 6 sends ultrasonic pulse
+    GPIO_ECHO = 18 #Listens for the reflected pulse
     GPIO.setup(GPIO_TRIGGER, GPIO.OUT)  #set GPIO direction (IN / OUT)
     GPIO.setup(GPIO_ECHO, GPIO.IN)
     
     # set Trigger to HIGH
     StopTime = time.time()
-    GPIO.output(GPIO_TRIGGER, True)
+    GPIO.output(GPIO_TRIGGER, True) #Start pulse
     
     # set Trigger after 0.01ms to LOW
     time.sleep(0.00006)
-    GPIO.output(GPIO_TRIGGER, False)
-    StartTime = time.time()
+    GPIO.output(GPIO_TRIGGER, False) #End pulse
+    StartTime = time.time() # Start of pulse
     
     # save StartTime
     while GPIO.input(GPIO_ECHO) == 0:
         pass
         counter += 1  #stop loop if it gets stuck
-        if counter == 5000:
+        if counter == 5000: # We don’t know why it is 5000
             new_reading = True
             break
-    StartTime = time.time()
+    StartTime = time.time() # Start of pulse, for error
     
-    # save time of arrival
+    # save time of arrival of the pulse
     while GPIO.input(GPIO_ECHO) == 1:
         pass
     StopTime = time.time()
@@ -183,11 +199,12 @@ def get_distance(last_distance):  #output distance in cm
 #     global count
 #     count = 0
 #     start_counter = 0
-#     def countPulse(channel):
+#     def countPulse(channel): 
 #         global count
 #         if start_counter == 1:
 #             count = count+1
-    
+
+#Spinny pin raises voltage, when it falls it calls the anonymous function countPulse
 #     GPIO.add_event_detect(FLOW_SENSOR_GPIO, GPIO.FALLING, callback=countPulse)
 
 #     try:
@@ -200,7 +217,10 @@ def get_distance(last_distance):  #output distance in cm
 #         count = 0
 #         time.sleep(0.1)
     
+#This should probably be in the main body of the function.
 #     except KeyboardInterrupt:
 #         print('\nkeyboard interrupt!')
 #         GPIO.cleanup()
 #         sys.exit()
+
+
