@@ -3,6 +3,7 @@ import threading
 import time
 import code
 from importlib import reload
+import atexit
 from abc import ABC, abstractmethod
 
 """
@@ -23,7 +24,6 @@ is recommended to stop an existing task using a module before reloading the
 module.
 """
 
-
 class Task(ABC):
     @abstractmethod
     def start(self):
@@ -41,7 +41,7 @@ class TaskHandle:
     def __init__(self, task: Task):
         self.start_time = time.time()
         self.task = task
-        self.thread = threading.Thread(target=task.start)
+        self.thread = threading.Thread(target=task.start, daemon=True)
         self.thread.start()
         TaskHandle.instances.append(self)
         global_logger.info(f"started task: {self}")
@@ -55,9 +55,28 @@ class TaskHandle:
     def __repr__(self):
         return f"TaskHandle(thread={self.thread.name}, start_time={self.start_time}, task={self.task})"
 
+    @staticmethod
+    def stop_all():
+        global_logger.info("stopping all tasks...")
+        while TaskHandle.instances:
+            handle = TaskHandle.instances[0]
+            handle.stop()
+        global_logger.info("all tasks stopped")
+
 if __name__ == "__main__":
     try:
         global_logger.info("starting main script")
+        atexit.register(TaskHandle.stop_all)
+
+        # start tasks
+        import stream
+        stream_task = TaskHandle(stream.Stream())
+        import server
+        server_task = TaskHandle(server.Server())
+        import notifs
+        notifs_task = TaskHandle(notifs.Notifs())
+
+        # enter interactive REPL to allow management and hot-reloading
         code.InteractiveConsole(locals={"TaskHandle": TaskHandle, "reload": reload}).interact()
     except Exception as e:
         global_logger.error(f"error in main: {str(e)}", exc_info=True)
