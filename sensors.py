@@ -13,39 +13,40 @@ stream_logger = setup_logger("logs/sensors.log", "Sensors")
 
 sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
 
-LOG_EVERY = 15 # minutes
-
 class SensorDataCollector(Task):
     def __init__(self):
-        pass
+        self.logging_interval = 15 * 60 # seconds
+
+        # store the last values
+        self.pH = np.nan
+        self.TDS = np.nan
+        self.distance = np.nan  #to give an arbitrary initial value to getData for the first time the distance sensor fails
+        self.wtemp = 21  #arbitrary initial value
+        self.hum = np.nan
+        self.atemp = np.nan
+        self.last_log_time = round(time.time())
+        self.next_log_time = self.last_log_time
 
     def start(self):
-        distance = np.nan  #to give an arbitrary initial value to getData for the first time the distance sensor fails
-        wtemp = 21  #arbitrary initial value
-        hum = np.nan
-        atemp = np.nan
-        last_log_time = round(time.time())
-        interval = LOG_EVERY * 60  # convert minutes to seconds
-        next_log_time = last_log_time
-
         # get initial readings; these are done immediately to allow sensors to stabilize
         for i in range(10):
-            pH, TDS, hum, atemp, wtemp, distance = np.round(get_data(distance, wtemp, hum, atemp), 2)
+            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
+            stream_logger.info(f"Initial reading #{i}: {self.pH}, {self.TDS}, {self.hum}, {self.atemp}, {self.wtemp}, {self.distance}")
             time.sleep(1)
 
         while True:
             # wait until the right time to log
             curr_time = round(time.time())
-            if curr_time < next_log_time:
-                stream_logger.info(f"Waiting for next log time: {next_log_time - curr_time} seconds")
-                time.sleep(next_log_time - curr_time)
+            if curr_time < self.next_log_time:
+                stream_logger.info(f"Waiting for next log time: {self.next_log_time - curr_time} seconds")
+                time.sleep(self.next_log_time - curr_time)
                 continue
 
             # the time to log has passed; get the data
-            pH, TDS, hum, atemp, wtemp, distance = np.round(get_data(distance, wtemp, hum, atemp), 2)
+            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
 
             # package the data and send to firebase
-            curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance)
+            curr_data = (curr_time, self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance)
             stream_logger.info(f"Logging data: {curr_data}")
             data_as_dict = {}
             for i in range(len(curr_data)):
@@ -53,8 +54,8 @@ class SensorDataCollector(Task):
             db.collection(u'stats').add(data_as_dict)
 
             # update the last log time
-            next_log_time = last_log_time + interval
-            last_log_time = next_log_time
+            self.next_log_time = self.last_log_time + self.logging_interval
+            self.last_log_time = self.next_log_time
 
     def stop(self):
         pass
