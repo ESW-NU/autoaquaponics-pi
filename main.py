@@ -83,7 +83,7 @@ if __name__ == "__main__":
         sensors_task = TaskHandle(sensors.SensorDataCollector())
 
         # enter interactive REPL to allow management and hot-reloading
-        code.InteractiveConsole(locals={"TaskHandle": TaskHandle, "reload": reload}).interact()
+        code.InteractiveConsole(locals=globals()).interact()
     except Exception as e:
         global_logger.error(f"error in main: {str(e)}", exc_info=True)
     finally:
