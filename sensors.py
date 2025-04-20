@@ -10,7 +10,7 @@ import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 
 sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
-cred = credentials.Certificate("../Desktop/serviceAccountKey.json")
+cred = credentials.Certificate("./firebase_service_account_key.json")
 app = firebase_admin.initialize_app(cred)
 db = firestore.client()
 
