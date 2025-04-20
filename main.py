@@ -1,4 +1,4 @@
-from .logs import global_logger
+from logs import global_logger
 import threading
 import time
 import code

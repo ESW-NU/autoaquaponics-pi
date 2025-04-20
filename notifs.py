@@ -4,9 +4,9 @@ import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
-from .logs import global_logger
-from .main import Task
-from .firebase import db
+from logs import global_logger
+from main import Task
+from firebase import db
 from firebase_admin import firestore
 
 # Email configuration

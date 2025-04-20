@@ -1,13 +1,13 @@
-from .main import Task
+from main import Task
 import numpy as np
 import time
-from .logs import global_logger, setup_logger
+from logs import global_logger, setup_logger
 
 import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
-from .firebase import db
+from firebase import db
 
 stream_logger = setup_logger("logs/sensors.log", "Sensors")
 
