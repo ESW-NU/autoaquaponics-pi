@@ -3,22 +3,11 @@ import smtplib
 import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import firestore
-from dotenv import load_dotenv
 import requests
-from logs import global_logger
-from main import Task
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Initialize Firebase
-service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
-cred = credentials.Certificate(service_account_path)
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+from .logs import global_logger
+from .main import Task
+from .firebase import db
+from firebase_admin import firestore
 
 # Email configuration
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")

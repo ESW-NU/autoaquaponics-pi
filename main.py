@@ -1,10 +1,11 @@
-from logs import global_logger
+from .logs import global_logger
 import threading
 import time
 import code
 from importlib import reload
 import atexit
 from abc import ABC, abstractmethod
+from dotenv import load_dotenv
 
 """
 Main script for AutoAquaponics system.
@@ -67,6 +68,9 @@ if __name__ == "__main__":
     try:
         global_logger.info("starting main script")
         atexit.register(TaskHandle.stop_all)
+
+        # Load environment variables from .env file
+        load_dotenv()
 
         # start tasks
         import stream

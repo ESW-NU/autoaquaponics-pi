@@ -1,19 +1,17 @@
-from main import Task
+from .main import Task
 import numpy as np
-import firebase_admin
 import time
-from firebase_admin import credentials, firestore
-from logs import global_logger
+from .logs import global_logger, setup_logger
 
 import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
+from .firebase import db
+
+stream_logger = setup_logger("logs/sensors.log", "Sensors")
 
 sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
-cred = credentials.Certificate("./firebase_service_account_key.json")
-app = firebase_admin.initialize_app(cred)
-db = firestore.client()
 
 LOG_EVERY = 15 # minutes
 
@@ -34,7 +32,7 @@ class SensorDataCollector(Task):
             # wait until the right time to log
             curr_time = round(time.time())
             if curr_time < next_log_time:
-                global_logger.info(f"Waiting for next log time: {next_log_time - curr_time} seconds")
+                stream_logger.info(f"Waiting for next log time: {next_log_time - curr_time} seconds")
                 time.sleep(next_log_time - curr_time)
                 continue
 
@@ -43,7 +41,7 @@ class SensorDataCollector(Task):
 
             # package the data and send to firebase
             curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance)
-            global_logger.info(f"Logging data: {curr_data}")
+            stream_logger.info(f"Logging data: {curr_data}")
             data_as_dict = {}
             for i in range(len(curr_data)):
                 data_as_dict[sensors[i]] = curr_data[i]
