@@ -3,6 +3,7 @@ import numpy as np
 import firebase_admin
 import time
 from firebase_admin import credentials, firestore
+from logs import global_logger
 
 import board
 import busio
@@ -33,6 +34,7 @@ class SensorDataCollector(Task):
             # wait until the right time to log
             curr_time = round(time.time())
             if curr_time < next_log_time:
+                global_logger.info(f"Waiting for next log time: {next_log_time - curr_time} seconds")
                 time.sleep(next_log_time - curr_time)
                 continue
 
@@ -41,6 +43,7 @@ class SensorDataCollector(Task):
 
             # package the data and send to firebase
             curr_data = (curr_time, pH, TDS, hum, atemp, wtemp, distance)
+            global_logger.info(f"Logging data: {curr_data}")
             data_as_dict = {}
             for i in range(len(curr_data)):
                 data_as_dict[sensors[i]] = curr_data[i]
@@ -61,7 +64,7 @@ def get_data(distance, wtemp, hum, atemp):
 i2c = busio.I2C(board.SCL, board.SDA)
 ads = ADS.ADS1115(i2c)
 ads.gain = 2/3
-ph_adc = AnalogIn(ads, ADS.P0)
+ph_adc = AnalogIn(ads, ADS.P2)
 
 def get_ph():
     neutral_voltage = 1.5 # the voltage when the pH is 7
