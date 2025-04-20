@@ -1,13 +1,17 @@
+from main import Task
 import numpy as np
 import firebase_admin
 import time
 from firebase_admin import credentials, firestore
-from main import Task
+
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
 
 sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
 cred = credentials.Certificate("../Desktop/serviceAccountKey.json")
 app = firebase_admin.initialize_app(cred)
-
 db = firestore.client()
 
 LOG_EVERY = 15 # minutes
@@ -51,4 +55,15 @@ class SensorDataCollector(Task):
 
 def get_data(distance, wtemp, hum, atemp):
     # get the actual data
-    return 7.0, 500.0, 60.0, 25.0, 20.0, 30.0
+    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan
+
+# initialize interface with sensors
+i2c = busio.I2C(board.SCL, board.SDA)
+ads = ADS.ADS1115(i2c)
+ads.gain = 2/3
+ph_adc = AnalogIn(ads, ADS.P0)
+
+def get_ph():
+    neutral_voltage = 1.5 # the voltage when the pH is 7
+    inverse_slope = -0.1765 # volts per pH unit
+    return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
