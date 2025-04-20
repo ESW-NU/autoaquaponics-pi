@@ -75,6 +75,8 @@ if __name__ == "__main__":
         server_task = TaskHandle(server.Server())
         import notifs
         notifs_task = TaskHandle(notifs.Notifs())
+        import sensors
+        sensors_task = TaskHandle(sensors.SensorDataCollector())
 
         # enter interactive REPL to allow management and hot-reloading
         code.InteractiveConsole(locals={"TaskHandle": TaskHandle, "reload": reload}).interact()
