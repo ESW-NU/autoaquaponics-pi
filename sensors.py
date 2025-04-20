@@ -28,6 +28,11 @@ class SensorDataCollector(Task):
         interval = LOG_EVERY * 60  # convert minutes to seconds
         next_log_time = last_log_time
 
+        # get initial readings; these are done immediately to allow sensors to stabilize
+        for i in range(10):
+            pH, TDS, hum, atemp, wtemp, distance = np.round(get_data(distance, wtemp, hum, atemp), 2)
+            time.sleep(1)
+
         while True:
             # wait until the right time to log
             curr_time = round(time.time())
