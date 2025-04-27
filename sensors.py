@@ -3,11 +3,16 @@ import numpy as np
 import time
 from logs import global_logger, setup_logger
 
+import lgpio as GPIO
+
 import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 from firebase import db
+
+h = GPIO.gpiochip_open(0)
+flow_pin = 16
 
 stream_logger = setup_logger("logs/sensors.log", "Sensors")
 
@@ -63,7 +68,7 @@ class SensorDataCollector(Task):
 
 def get_data(distance, wtemp, hum, atemp):
     # get the actual data
-    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan, get_flow()
+    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan, get_flow(flow_pin, k=0.2)
 
 # initialize interface with sensors
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -76,6 +81,15 @@ def get_ph():
     inverse_slope = -0.1765 # volts per pH unit
     return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
 
-def get_flow():
-    # TODO add code to get the flow rn
-    pass
+def get_flow(FLOW_SENSOR_GPIO, k, t_sec=5):
+    GPIO.gpio_claim_alert(h, FLOW_SENSOR_GPIO, eFlags=GPIO.FALLING_EDGE, lFlags=GPIO.SET_PULL_UP)
+    # lgpio library's default callback function will automatically count edges
+    flow_cb = GPIO.callback(h, FLOW_SENSOR_GPIO, GPIO.FALLING_EDGE)
+    time.sleep(t_sec)
+    count = flow_cb.tally()
+    freq = count/t_sec
+    flow = (freq / k)*15.850323141489  # Pulse frequency (Hz) = 0.2Q, Q is flow rate in GPH.
+    #print("The flow is: %.3f GPH" % (flow))
+    #print("The count is: " + str(count))
+    flow_cb.cancel()
+    return flow
