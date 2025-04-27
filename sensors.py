@@ -11,7 +11,7 @@ from firebase import db
 
 stream_logger = setup_logger("logs/sensors.log", "Sensors")
 
-sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
+sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance', 'flow')
 
 class SensorDataCollector(Task):
     def __init__(self):
@@ -26,12 +26,13 @@ class SensorDataCollector(Task):
         self.atemp = np.nan
         self.last_log_time = round(time.time())
         self.next_log_time = self.last_log_time
+        self.flow = np.nan
 
     def start(self):
         # get initial readings; these are done immediately to allow sensors to stabilize
         for i in range(10):
-            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
-            stream_logger.info(f"Initial reading #{i}: {self.pH}, {self.TDS}, {self.hum}, {self.atemp}, {self.wtemp}, {self.distance}")
+            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance, self.flow = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
+            stream_logger.info(f"Initial reading #{i}: {self.pH}, {self.TDS}, {self.hum}, {self.atemp}, {self.wtemp}, {self.distance}, {self.flow}")
             time.sleep(1)
 
         while True:
@@ -43,10 +44,10 @@ class SensorDataCollector(Task):
                 continue
 
             # the time to log has passed; get the data
-            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
+            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance, self.flow = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
 
             # package the data and send to firebase
-            curr_data = (curr_time, self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance)
+            curr_data = (curr_time, self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance, self.flow)
             stream_logger.info(f"Logging data: {curr_data}")
             data_as_dict = {}
             for i in range(len(curr_data)):
@@ -60,9 +61,9 @@ class SensorDataCollector(Task):
     def stop(self):
         pass
 
-def get_data(distance, wtemp, hum, atemp):
+def get_data(distance, wtemp, hum, atemp, flow):
     # get the actual data
-    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan
+    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
 
 # initialize interface with sensors
 i2c = busio.I2C(board.SCL, board.SDA)
