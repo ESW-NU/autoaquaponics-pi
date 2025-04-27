@@ -61,9 +61,9 @@ class SensorDataCollector(Task):
     def stop(self):
         pass
 
-def get_data(distance, wtemp, hum, atemp, flow):
+def get_data(distance, wtemp, hum, atemp):
     # get the actual data
-    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan, get_flow()
 
 # initialize interface with sensors
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -75,3 +75,7 @@ def get_ph():
     neutral_voltage = 1.5 # the voltage when the pH is 7
     inverse_slope = -0.1765 # volts per pH unit
     return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
+
+def get_flow():
+    # TODO add code to get the flow rn
+    pass
