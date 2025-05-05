@@ -3,8 +3,41 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import pykka
 from logs import register_logger
+from dataclasses import dataclass
+from typing import Any
 
 firebase_logger = register_logger("logs/firebase.log", "Firebase")
+
+@dataclass
+class GetTolerances:
+    """Message to request tolerances from Firebase."""
+    pass
+
+@dataclass
+class GetNotificationRecipients:
+    """Message to request notification recipients from Firebase."""
+    pass
+
+@dataclass
+class SubscribeToStats:
+    """Message to subscribe to stats updates. The specified actor will be sent
+    a StatsUpdate message whenever the stats collection is updated."""
+    actor_ref: pykka.ActorRef
+
+@dataclass
+class UnsubscribeFromStats:
+    """Message to unsubscribe from stats updates."""
+    actor_ref: pykka.ActorRef
+
+@dataclass
+class AddTestData:
+    """Message to add test data to Firebase."""
+    pass
+
+@dataclass
+class StatsUpdate:
+    """Message containing updated stats data."""
+    data: dict[str, Any]
 
 class Firebase(pykka.ThreadingActor):
     def __init__(self, firebase_logger=firebase_logger):
@@ -29,25 +62,26 @@ class Firebase(pykka.ThreadingActor):
 
     def on_receive(self, message):
         self.firebase_logger.debug(f"Received message: {message}")
-        if isinstance(message, dict):
-            if message.get('type') == 'get_tolerances':
-                self.firebase_logger.debug("Getting tolerances")
-                return self.get_tolerances()
-            elif message.get('type') == 'get_notification_recipients':
-                self.firebase_logger.debug("Getting notification recipients")
-                return self.get_notification_recipients()
-            elif message.get('type') == 'subscribe_to_stats':
-                self.firebase_logger.debug("Subscribing to stats")
-                self.stats_listeners.add(message['actor_ref'])
-                return True
-            elif message.get('type') == 'unsubscribe_from_stats':
-                self.firebase_logger.debug("Unsubscribing from stats")
-                self.stats_listeners.discard(message['actor_ref'])
-                return True
-            elif message.get('type') == 'add_test_data':
-                self.firebase_logger.debug("Adding test data")
-                return self.add_test_data()
-        self.firebase_logger.warning(f"Received unknown message: {message}")
+
+        if isinstance(message, GetTolerances):
+            self.firebase_logger.debug("Getting tolerances")
+            return self.get_tolerances()
+        elif isinstance(message, GetNotificationRecipients):
+            self.firebase_logger.debug("Getting notification recipients")
+            return self.get_notification_recipients()
+        elif isinstance(message, SubscribeToStats):
+            self.firebase_logger.debug("Subscribing to stats")
+            self.stats_listeners.add(message.actor_ref)
+            return True
+        elif isinstance(message, UnsubscribeFromStats):
+            self.firebase_logger.debug("Unsubscribing from stats")
+            self.stats_listeners.discard(message.actor_ref)
+            return True
+        elif isinstance(message, AddTestData):
+            self.firebase_logger.debug("Adding test data")
+            return self.add_test_data()
+
+        self.firebase_logger.warning(f"Received unknown message type: {type(message)}")
 
     def on_failure(self, failure):
         self.firebase_logger.error(f"Firebase actor failed: {failure}")
@@ -79,7 +113,7 @@ class Firebase(pykka.ThreadingActor):
             self.firebase_logger.debug(f"New sensor data received: {sensor_data}")
             # Notify all subscribers
             for listener in self.stats_listeners:
-                listener.tell({'type': 'stats_update', 'data': sensor_data})
+                listener.tell(StatsUpdate(data=sensor_data))
 
     def get_tolerances(self):
         """Retrieve tolerances from Firebase."""

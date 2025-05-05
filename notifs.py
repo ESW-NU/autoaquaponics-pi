@@ -1,9 +1,10 @@
-import time
 import pykka
 from logs import register_logger
-from firebase import Firebase
+from firebase import StatsUpdate, GetTolerances, GetNotificationRecipients, SubscribeToStats, UnsubscribeFromStats
 from email_sender import send_email
 from slack_sender import send_slack_message
+from dataclasses import dataclass
+from typing import List
 
 notifs_logger = register_logger("logs/notifs.log", "Notifications")
 
@@ -31,6 +32,12 @@ def _check_tolerances(sensor_data, tolerances):
     notifs_logger.debug(f"alerts generated: {alerts}")
     return alerts
 
+@dataclass
+class SendAlert:
+    """Message to send alerts to notification recipients."""
+    alerts: List[str]
+    recipients: List[str]
+
 class Notifs(pykka.ThreadingActor):
     def __init__(self, actor_firebase, notifs_logger=notifs_logger):
         super().__init__()
@@ -40,18 +47,12 @@ class Notifs(pykka.ThreadingActor):
 
     def on_start(self):
         self.notifs_logger.info("Starting real-time monitoring of sensor data")
-        self.actor_firebase.tell({
-            'type': 'subscribe_to_stats',
-            'actor_ref': self.actor_ref
-        })
+        self.actor_firebase.tell(SubscribeToStats(actor_ref=self.actor_ref))
 
     def on_stop(self):
         self.notifs_logger.info("Stopping notifications")
         if self.actor_firebase:
-            self.actor_firebase.tell({
-                'type': 'unsubscribe_from_stats',
-                'actor_ref': self.actor_ref
-            })
+            self.actor_firebase.tell(UnsubscribeFromStats(actor_ref=self.actor_ref))
             self.actor_firebase.stop()
 
     def on_failure(self, failure):
@@ -59,23 +60,23 @@ class Notifs(pykka.ThreadingActor):
         self.on_stop()
 
     def on_receive(self, message):
-        if isinstance(message, dict):
-            if message.get('type') == 'stats_update':
-                self._handle_sensor_update(message['data'])
-            else:
-                self.notifs_logger.warning(f"Received unknown message: {message}")
+        if isinstance(message, StatsUpdate):
+            self._handle_sensor_update(message.data)
+            return
+
+        self.notifs_logger.warning(f"Received unknown message type: {type(message)}")
 
     def _handle_sensor_update(self, sensor_data):
         """Handle real-time updates to sensor data."""
         self.notifs_logger.debug(f"Processing sensor data: {sensor_data}")
-        tolerances = self.actor_firebase.ask({'type': 'get_tolerances'})
+        tolerances = self.actor_firebase.ask(GetTolerances())
         if not tolerances:
             self.notifs_logger.info("No tolerances defined")
             return
 
         alerts = _check_tolerances(sensor_data, tolerances)
         if alerts:
-            recipients = self.actor_firebase.ask({'type': 'get_notification_recipients'})
+            recipients = self.actor_firebase.ask(GetNotificationRecipients())
             subject = "Aquaponics System Alert"
             body = "The following issues were detected:\n\n" + "\n".join(alerts)
 
