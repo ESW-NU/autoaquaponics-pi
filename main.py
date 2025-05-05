@@ -2,9 +2,11 @@ from logs import global_logger
 import time
 import atexit
 import pykka
+import dotenv
 
 from dummy import Dummy
 from firebase import Firebase
+from notifs import Notifs
 from stream import Stream
 
 """
@@ -20,26 +22,29 @@ def shut_down():
 atexit.register(shut_down)
 
 actor_dummy = None
+actor_firebase = None
+actor_notifs = None
 actor_stream = None
 
 def main():
     try:
         global_logger.info("starting main script")
+        dotenv.load_dotenv()
 
-        global actor_dummy
-        global_logger.info("starting dummy actor")
-        actor_dummy = Dummy().start()
-        actor_dummy.tell("start")
-
+        # initialize the firebase actor
         global actor_firebase
         global_logger.info("starting firebase actor")
-        actor_firebase = Firebase().start()
-        actor_firebase.tell("start")
+        actor_firebase = Firebase.start()
+
+        # initialize the notifs actor
+        global actor_notifs
+        global_logger.info("starting notifs actor")
+        actor_notifs = Notifs.start(actor_firebase)
 
         # initialize the stream
         global actor_stream
         global_logger.info("starting stream actor")
-        actor_stream = Stream().start()
+        actor_stream = Stream.start()
         actor_stream.tell("start")
 
         # keep alive forever
