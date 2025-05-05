@@ -83,7 +83,9 @@ class Notifs(pykka.ThreadingActor):
             self.notifs_logger.info(f"Alerts generated for this update: {repr(body)}")
             if not self.first_time:
                 for recipient in recipients:
+                    self.notifs_logger.info(f"Sending email to {recipient}")
                     send_email(recipient, subject, body)
+                self.notifs_logger.info(f"Sending slack message")
                 send_slack_message(body)
         else:
             self.notifs_logger.info("No alerts generated for this update")

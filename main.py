@@ -21,6 +21,9 @@ def shut_down():
     pykka.ActorRegistry.stop_all()
 atexit.register(shut_down)
 
+# load environment variables from .env file
+dotenv.load_dotenv()
+
 actor_dummy = None
 actor_firebase = None
 actor_notifs = None
@@ -29,7 +32,6 @@ actor_stream = None
 def main():
     try:
         global_logger.info("starting main script")
-        dotenv.load_dotenv()
 
         # initialize the firebase actor
         global actor_firebase
