@@ -1,90 +1,52 @@
 from logs import global_logger
-import threading
 import time
-import code
-from importlib import reload
 import atexit
-from abc import ABC, abstractmethod
-from dotenv import load_dotenv
+import pykka
+
+from dummy import Dummy
+from firebase import Firebase
+from stream import Stream
 
 """
 Main script for AutoAquaponics system.
-
-This script contains a Task class that defines a task that can run concurrently,
-as well as a TaskHandle class that can be used to run tasks in separate threads.
-The script starts a REPL that can be used to manage these tasks.
-
-To create a task, use the REPL to import the desired module, e.g. `import
-notifs`, which contains a definition of the Task class. Then, run task using the
-TaskHandle constructor, passing in a valid Task object: `task_notifs =
-TaskHandle(notifs.Notifs())`. In addition to storing the resulting task object
-in a variable, the task will be added to the `TaskHandle.instances` list. To
-stop a task, call the `stop` method on the handle, e.g. `task_notifs.stop()`. To
-hot-swap a running module, use `reload(<module>)`, and start the task again. It
-is recommended to stop an existing task using a module before reloading the
-module.
 """
 
-class Task(ABC):
-    @abstractmethod
-    def start(self):
-        """Start the task. Called INSIDE this task's dedicated thread."""
-        pass
+def shut_down():
+    global_logger.info("shutting down")
 
-    @abstractmethod
-    def stop(self):
-        """Stop the task. Called OUTSIDE this task's dedicated thread."""
-        pass
+    # clean up actors when program exits
+    global_logger.info("stopping all actors")
+    pykka.ActorRegistry.stop_all()
+atexit.register(shut_down)
 
-class TaskHandle:
-    instances = []
+actor_dummy = None
+actor_stream = None
 
-    def __init__(self, task: Task):
-        self.start_time = time.time()
-        self.task = task
-        self.thread = threading.Thread(target=task.start, daemon=True)
-        self.thread.start()
-        TaskHandle.instances.append(self)
-        global_logger.info(f"started task: {self}")
-
-    def stop(self):
-        self.task.stop()
-        self.thread.join()
-        TaskHandle.instances.remove(self)
-        global_logger.info(f"stopped task: {self}")
-
-    def __repr__(self):
-        return f"TaskHandle(thread={self.thread.name}, start_time={self.start_time}, task={self.task})"
-
-    @staticmethod
-    def stop_all():
-        global_logger.info("stopping all tasks...")
-        while TaskHandle.instances:
-            handle = TaskHandle.instances[0]
-            handle.stop()
-        global_logger.info("all tasks stopped")
-
-if __name__ == "__main__":
+def main():
     try:
         global_logger.info("starting main script")
-        atexit.register(TaskHandle.stop_all)
 
-        # Load environment variables from .env file
-        load_dotenv()
+        global actor_dummy
+        global_logger.info("starting dummy actor")
+        actor_dummy = Dummy().start()
+        actor_dummy.tell("start")
 
-        # start tasks
-        import stream
-        stream_task = TaskHandle(stream.Stream())
-        import server
-        server_task = TaskHandle(server.Server())
-        import notifs
-        notifs_task = TaskHandle(notifs.Notifs())
-        import sensors
-        sensors_task = TaskHandle(sensors.SensorDataCollector())
+        global actor_firebase
+        global_logger.info("starting firebase actor")
+        actor_firebase = Firebase().start()
+        actor_firebase.tell("start")
 
-        # enter interactive REPL to allow management and hot-reloading
-        code.InteractiveConsole(locals=globals()).interact()
+        # initialize the stream
+        global actor_stream
+        global_logger.info("starting stream actor")
+        actor_stream = Stream().start()
+        actor_stream.tell("start")
+
+        # keep alive forever
+        while True:
+            time.sleep(1)
     except Exception as e:
         global_logger.error(f"error in main: {str(e)}", exc_info=True)
-    finally:
-        global_logger.info("shutting down")
+
+if __name__ == "__main__":
+    main()
