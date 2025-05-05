@@ -3,15 +3,20 @@ import numpy as np
 import time
 from logs import global_logger, setup_logger
 
+import lgpio as GPIO
+
 import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 from firebase import db
 
+h = GPIO.gpiochip_open(0)
+flow_pin = 16
+
 stream_logger = setup_logger("logs/sensors.log", "Sensors")
 
-sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance')
+sensors = ('unix_time', 'pH', 'TDS', 'humidity', 'air_temp', 'water_temp', 'distance', 'flow')
 
 class SensorDataCollector(Task):
     def __init__(self):
@@ -26,12 +31,13 @@ class SensorDataCollector(Task):
         self.atemp = np.nan
         self.last_log_time = round(time.time())
         self.next_log_time = self.last_log_time
+        self.flow = np.nan
 
     def start(self):
         # get initial readings; these are done immediately to allow sensors to stabilize
         for i in range(10):
-            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
-            stream_logger.info(f"Initial reading #{i}: {self.pH}, {self.TDS}, {self.hum}, {self.atemp}, {self.wtemp}, {self.distance}")
+            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance, self.flow = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
+            stream_logger.info(f"Initial reading #{i}: {self.pH}, {self.TDS}, {self.hum}, {self.atemp}, {self.wtemp}, {self.distance}, {self.flow}")
             time.sleep(1)
 
         while True:
@@ -43,10 +49,10 @@ class SensorDataCollector(Task):
                 continue
 
             # the time to log has passed; get the data
-            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
+            self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance, self.flow = np.round(get_data(self.distance, self.wtemp, self.hum, self.atemp), 2)
 
             # package the data and send to firebase
-            curr_data = (curr_time, self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance)
+            curr_data = (curr_time, self.pH, self.TDS, self.hum, self.atemp, self.wtemp, self.distance, self.flow)
             stream_logger.info(f"Logging data: {curr_data}")
             data_as_dict = {}
             for i in range(len(curr_data)):
@@ -62,7 +68,7 @@ class SensorDataCollector(Task):
 
 def get_data(distance, wtemp, hum, atemp):
     # get the actual data
-    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan
+    return get_ph(), np.nan, np.nan, np.nan, np.nan, np.nan, get_flow(flow_pin, k=0.2)
 
 # initialize interface with sensors
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -74,3 +80,16 @@ def get_ph():
     neutral_voltage = 1.5 # the voltage when the pH is 7
     inverse_slope = -0.1765 # volts per pH unit
     return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
+
+def get_flow(FLOW_SENSOR_GPIO, k, t_sec=5):
+    GPIO.gpio_claim_alert(h, FLOW_SENSOR_GPIO, eFlags=GPIO.FALLING_EDGE, lFlags=GPIO.SET_PULL_UP)
+    # lgpio library's default callback function will automatically count edges
+    flow_cb = GPIO.callback(h, FLOW_SENSOR_GPIO, GPIO.FALLING_EDGE)
+    time.sleep(t_sec)
+    count = flow_cb.tally()
+    freq = count/t_sec
+    flow = (freq / k)*15.850323141489  # Pulse frequency (Hz) = 0.2Q, Q is flow rate in GPH.
+    #print("The flow is: %.3f GPH" % (flow))
+    #print("The count is: " + str(count))
+    flow_cb.cancel()
+    return flow
