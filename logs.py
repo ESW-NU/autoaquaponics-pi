@@ -1,5 +1,6 @@
 import logging
 import logging.handlers
+import atexit
 
 """
 This module sets up logging for the AutoAquaponics system.
@@ -30,6 +31,10 @@ def register_logger(log_file, subsystem_name):
     )
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+
+    # indicate start and end of logging
+    logger.info("======================= START LOGGING =======================")
+    atexit.register(lambda: logger.info("======================= END LOGGING ======================="))
 
     return logger
 
