@@ -9,7 +9,7 @@ from firebase import Firebase
 from notifs import Notifs
 from stream import Stream
 from sensors import Sensors
-from server import Server
+from api_server import Server
 
 """
 Main script for AutoAquaponics system.
