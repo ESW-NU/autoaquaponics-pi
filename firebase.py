@@ -145,5 +145,6 @@ class Firebase(pykka.ThreadingActor):
     def add_sensor_data(self, data: SensorData):
         """Add sensor data to Firestore."""
         data_dict = data.__dict__
-        self.db.collection('stats').add(data_dict)
-        self.firebase_logger.debug(f"Added sensor data: {data_dict}")
+        doc_ref = self.db.collection('stats').add(data_dict)
+        doc_id = doc_ref[1].id
+        self.firebase_logger.debug(f"Added sensor data with id {doc_id}: {data_dict}")
