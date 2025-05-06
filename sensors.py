@@ -14,17 +14,13 @@ from dataclasses import dataclass
 
 sensor_logger = register_logger("logs/sensors.log", "Sensors")
 
-def get_data(gpio, ph_adc, flow_pin):
-    """Get readings from all sensors."""
-    return get_ph(ph_adc), np.nan, np.nan, np.nan, np.nan, np.nan, get_flow(gpio, flow_pin)
-
-def get_ph(ph_adc):
+def measure_ph(ph_adc):
     """Get pH reading."""
     neutral_voltage = 1.5  # the voltage when the pH is 7
     inverse_slope = -0.1765  # volts per pH unit
     return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
 
-def get_flow(gpio, flow_pin, t_sec=5):
+def measure_flow(gpio, flow_pin, t_sec=5):
     """Get flow rate reading."""
     flow_cb = GPIO.callback(gpio, flow_pin, GPIO.FALLING_EDGE)
     time.sleep(t_sec)
@@ -47,20 +43,37 @@ class SensorsHardware:
         self.ads.gain = 2/3
         self.adc_ph = AnalogIn(self.ads, ADS.P2)
 
-    def get_data(self) -> SensorData:
+    def measure_all(self) -> SensorData:
         return SensorData(
             unix_time=round(time.time()),
-            pH=get_ph(self.adc_ph),
-            flow=get_flow(self.gpio, self.flow_pin)
+            pH=self.measure_ph(),
+            flow=self.measure_flow()
         )
+
+    def measure_ph(self):
+        return measure_ph(self.adc_ph)
+
+    def measure_flow(self):
+        return measure_flow(self.gpio, self.flow_pin)
+
+@dataclass
+class StabilizeMeasurements:
+    """Message to trigger making multiple measurements immediately to stabilize
+    readings."""
+    pass
 
 @dataclass
 class CollectAndSendData:
     """Message to trigger data collection."""
     pass
 
+@dataclass
+class TriggerSensorLoop:
+    """Message to trigger the sensor loop."""
+    logging_interval: int
+
 class Sensors(pykka.ThreadingActor):
-    def __init__(self, actor_firebase, sensor_logger=sensor_logger, logging_interval=15 * 60):
+    def __init__(self, actor_firebase, sensor_logger=sensor_logger):
         super().__init__()
 
         self.logger = sensor_logger
@@ -71,7 +84,7 @@ class Sensors(pykka.ThreadingActor):
         self.pH = np.nan
         self.flow = np.nan
 
-        self.logging_interval = logging_interval
+        self.logging_interval = None
         self.last_log_time = None
         self.next_log_time = None
         self.timer_thread = None
@@ -85,24 +98,30 @@ class Sensors(pykka.ThreadingActor):
             self.logger.info("Initializing sensors hardware")
             self.hardware = SensorsHardware()
 
-            self.logger.info("Getting 10 initial readings for stabilization")
-            for i in range(10):
-                data = self.hardware.get_data()
-                self.logger.debug(f"Initial reading #{i}: {data}")
-                time.sleep(1)
-
-            self.logger.info("Starting sensor loop")
-            self.last_log_time = round(time.time())
-            self.next_log_time = self.last_log_time
-            threading.Thread(target=self.collect_and_send_data_repeated).start()
+            self.actor_ref.tell(StabilizeMeasurements())
+            self.actor_ref.tell(TriggerSensorLoop(logging_interval=15 * 60))
         except Exception as e:
             self.logger.error(f"Error initializing sensors hardware: {e}")
             raise e
 
     def on_receive(self, message):
         """Handle incoming messages."""
+        self.logger.debug(f"Received message: {message}")
+
+        if isinstance(message, TriggerSensorLoop):
+            self.logger.info("Starting sensor loop")
+            self.last_log_time = round(time.time())
+            self.next_log_time = self.last_log_time
+            self.logging_interval = message.logging_interval
+            threading.Thread(target=self.measure_and_send_data_repeated).start()
+            return
+
         if isinstance(message, CollectAndSendData):
-            self.collect_and_send_data()
+            self.measure_and_send_data()
+            return
+
+        if isinstance(message, StabilizeMeasurements):
+            self.stabilize_measurements()
             return
 
         self.logger.warning(f"Received unknown message type: {type(message)}")
@@ -120,17 +139,24 @@ class Sensors(pykka.ThreadingActor):
 
     # custom methods
 
-    def collect_and_send_data(self):
+    def stabilize_measurements(self):
+        self.logger.info("Measuring 10 initial pH readings for stabilization")
+        for i in range(10):
+            data = self.hardware.measure_ph()
+            self.logger.debug(f"Initial reading #{i}: {data}")
+            time.sleep(1)
+
+    def measure_and_send_data(self):
         # get and send data
-        data = self.hardware.get_data()
+        data = self.hardware.measure_all()
         self.logger.debug(f"Logging data: {data}")
         self.actor_firebase.tell(AddSensorData(data))
 
-    def collect_and_send_data_repeated(self):
+    def measure_and_send_data_repeated(self):
         if self.timer_thread is not None:
             self.timer_thread.cancel()
 
-        self.collect_and_send_data()
+        self.measure_and_send_data()
 
         # schedule the next log time
         curr_time = round(time.time())
@@ -140,5 +166,5 @@ class Sensors(pykka.ThreadingActor):
             self.next_log_time = curr_time + self.logging_interval
         wait_time = self.next_log_time - curr_time
         self.logger.debug(f"Next log time: {self.next_log_time} in {wait_time} seconds")
-        self.timer_thread = threading.Timer(wait_time, self.collect_and_send_data_repeated)
+        self.timer_thread = threading.Timer(wait_time, self.measure_and_send_data_repeated)
         self.timer_thread.start()
