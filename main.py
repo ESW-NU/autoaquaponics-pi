@@ -40,28 +40,33 @@ def main():
     try:
         global_logger.info("Hello World!")
 
-        # initialize the server actor
-        global_logger.debug("starting server actor")
-        Server.start()
-
-        # initialize the firebase actor
-        global_logger.debug("starting firebase actor")
-        Firebase.start()
-
-        # initialize the notifs actor
-        global_logger.debug("starting notifs actor")
-        Notifs.start()
-
-        # initialize the sensors actor
-        global_logger.debug("starting sensors actor")
-        Sensors.start()
-
         # keep alive forever
         while True:
-            global_logger.debug("staying alive")
-            time.sleep(60*60)
+            global_logger.debug("checking and starting actors")
 
-            # TODO check if any subsystems have crashed and restart them
+            # Check and start server actor if not running
+            if not pykka.ActorRegistry.get_by_class(Server):
+                global_logger.debug("starting server actor")
+                Server.start()
+
+            # Check and start firebase actor if not running
+            if not pykka.ActorRegistry.get_by_class(Firebase):
+                global_logger.debug("starting firebase actor")
+                Firebase.start()
+
+            # Check and start notifs actor if not running
+            if not pykka.ActorRegistry.get_by_class(Notifs):
+                global_logger.debug("starting notifs actor")
+                Notifs.start()
+
+            # Check and start sensors actor if not running
+            if not pykka.ActorRegistry.get_by_class(Sensors):
+                global_logger.debug("starting sensors actor")
+                Sensors.start()
+
+            global_logger.debug("staying alive")
+            time.sleep(60)
+
     except KeyboardInterrupt:
         global_logger.info("shutting down due to keyboard interrupt")
     except Exception as e:
