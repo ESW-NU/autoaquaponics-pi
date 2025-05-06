@@ -54,6 +54,8 @@ def draw_pattern():
         raise Exception("Failed to encode JPEG")
     return jpeg_img
 
+# TODO move to stream.py
+capture = None
 
 @routes.get('/stream')
 async def handle_websocket(request):
@@ -77,9 +79,24 @@ async def handle_websocket(request):
                     # no message from client, continue with sending
                     pass
 
-                # Send the image
-                jpeg_img = draw_pattern()
+                # TODO this should be moved to stream.py
+                # get the next frame
+                global capture
+                if capture is not None and capture.isOpened():
+                    ret, frame = capture.read()
+                    if ret:
+                        success, jpeg_img = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                        if not success:
+                            jpeg_img = draw_pattern()
+                    else:
+                        jpeg_img = draw_pattern()
+                else:
+                    jpeg_img = draw_pattern()
+
+                # send the frame
                 await ws.send_bytes(jpeg_img.tobytes())
+
+                # wait for the next frame
                 await asyncio.sleep(0.033)
             except Exception as e:
                 server_logger.error(f"Error streaming image: {str(e)}")
@@ -125,6 +142,11 @@ class Server(pykka.ThreadingActor):
                 self.event_loop.run_forever()
             self.thread = threading.Thread(target=worker, daemon=True)
             self.thread.start()
+
+            # TODO move to stream.py
+            # initialize capture object
+            global capture
+            capture = cv2.VideoCapture(0)
         except Exception as e:
             self.logger.error(f"Error starting API server: {e}")
             raise e
@@ -135,6 +157,11 @@ class Server(pykka.ThreadingActor):
             self.event_loop.stop()
         if self.thread:
             self.thread.join(timeout=1)
+
+        # TODO move to stream.py
+        global capture
+        if capture:
+            capture.release()
 
     def on_failure(self, failure):
         self.logger.error(f"API server actor failed: {failure}")
