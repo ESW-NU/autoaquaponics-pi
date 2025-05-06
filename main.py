@@ -47,15 +47,10 @@ def main():
         global_logger.debug("starting sensors actor")
         actor_sensors = Sensors.start(actor_firebase)
 
-        # initialize the stream
-        global actor_stream
-        global_logger.debug("starting stream actor")
-        actor_stream = Stream.start()
-        actor_stream.tell("start")
-
         # keep alive forever
         while True:
-            time.sleep(1)
+            global_logger.debug("staying alive")
+            time.sleep(60*60)
     except KeyboardInterrupt:
         global_logger.info("shutting down due to keyboard interrupt")
     except Exception as e:
