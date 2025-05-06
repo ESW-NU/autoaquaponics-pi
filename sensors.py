@@ -80,19 +80,23 @@ class Sensors(pykka.ThreadingActor):
     def on_start(self):
         """Initialize hardware and start data collection."""
 
-        self.logger.info("Initializing sensors hardware")
-        self.hardware = SensorsHardware()
+        try:
+            self.logger.info("Initializing sensors hardware")
+            self.hardware = SensorsHardware()
 
-        self.logger.info("Getting 10 initial readings for stabilization")
-        for i in range(10):
-            data = self.hardware.get_data()
-            self.logger.debug(f"Initial reading #{i}: {data}")
-            time.sleep(1)
+            self.logger.info("Getting 10 initial readings for stabilization")
+            for i in range(10):
+                data = self.hardware.get_data()
+                self.logger.debug(f"Initial reading #{i}: {data}")
+                time.sleep(1)
 
-        self.logger.info("Starting sensor loop")
-        self.last_log_time = round(time.time())
-        self.next_log_time = self.last_log_time
-        threading.Thread(target=self.collect_and_send_data_repeated).start()
+            self.logger.info("Starting sensor loop")
+            self.last_log_time = round(time.time())
+            self.next_log_time = self.last_log_time
+            threading.Thread(target=self.collect_and_send_data_repeated).start()
+        except Exception as e:
+            self.logger.error(f"Error initializing sensors hardware: {e}")
+            raise e
 
     def on_receive(self, message):
         """Handle incoming messages."""

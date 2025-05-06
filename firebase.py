@@ -49,17 +49,21 @@ class Firebase(pykka.ThreadingActor):
         self.watch = None
 
     def on_start(self):
-        self.firebase_logger.info("Initializing Firebase")
+        try:
+            self.firebase_logger.info("Initializing Firebase")
 
-        service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
-        if not service_account_path:
-            raise ValueError("FIREBASE_SERVICE_ACCOUNT_KEY_PATH environment variable not set")
-        cred = credentials.Certificate(service_account_path)
-        firebase_admin.initialize_app(cred)
+            service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
+            if not service_account_path:
+                raise ValueError("FIREBASE_SERVICE_ACCOUNT_KEY_PATH environment variable not set")
+            cred = credentials.Certificate(service_account_path)
+            firebase_admin.initialize_app(cred)
 
-        self.db = firestore.client()
-        self._setup_stats_listener()
-        self.firebase_logger.info("Firebase initialized successfully")
+            self.db = firestore.client()
+            self._setup_stats_listener()
+            self.firebase_logger.info("Firebase initialized successfully")
+        except Exception as e:
+            self.firebase_logger.error(f"Error initializing Firebase: {e}")
+            raise e
 
     def on_receive(self, message):
         self.firebase_logger.debug(f"Received message: {message}")
