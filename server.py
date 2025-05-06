@@ -2,13 +2,14 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import shutil
 import urllib.parse
-from main import Task
-from logs import global_logger, setup_logger
+from logs import register_logger
 from pathlib import Path
 import re
 import os
+import pykka
+import threading
 
-server_logger = setup_logger("logs/server.log", "HTTP Server")
+server_logger = register_logger("logs/server.log", "HTTP Server")
 
 def translate_path(relative_path: str) -> Path | None:
     cwd = Path.cwd()
@@ -76,16 +77,33 @@ class CustomRequestHandler(BaseHTTPRequestHandler):
             raise
 
     def log_message(self, format, *args):
-        server_logger.info(format % args)
+        server_logger.debug(format % args)
 
-class Server(Task):
-    def __init__(self, port=8080):
+class Server(pykka.ThreadingActor):
+    def __init__(self, port=8080, server_logger=server_logger):
+        super().__init__()
+        self.logger = server_logger
         self.port = port
-        self.httpd = HTTPServer(("", port), CustomRequestHandler)
+        self.httpd = None
+        self.thread = None
 
-    def start(self):
-        global_logger.info(f"Serving on port {self.port} with CORS enabled")
-        self.httpd.serve_forever()
+    def on_start(self):
+        try:
+            self.logger.info(f"Starting HTTP server on port {self.port}")
+            self.httpd = HTTPServer(("", self.port), CustomRequestHandler)
+            self.thread = threading.Thread(target=self.httpd.serve_forever).start()
+        except Exception as e:
+            self.logger.error(f"Error starting HTTP server: {e}")
+            raise e
 
-    def stop(self):
-        self.httpd.shutdown()
+    def on_stop(self):
+        self.logger.info("Stopping HTTP server")
+        if self.httpd:
+            self.httpd.shutdown()
+
+    def on_failure(self, failure):
+        self.logger.error(f"HTTP server actor failed: {failure}")
+        self.on_stop()
+
+    def on_receive(self, message):
+        self.logger.warning(f"Received unknown message type: {type(message)}")

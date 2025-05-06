@@ -8,6 +8,7 @@ from firebase import Firebase
 from notifs import Notifs
 from stream import Stream
 from sensors import Sensors
+from server import Server
 
 """
 Main script for AutoAquaponics system.
@@ -24,7 +25,7 @@ atexit.register(shut_down)
 # load environment variables from .env file
 dotenv.load_dotenv()
 
-actor_dummy = None
+actor_server = None
 actor_firebase = None
 actor_notifs = None
 actor_stream = None
@@ -32,6 +33,11 @@ actor_stream = None
 def main():
     try:
         global_logger.info("starting main script")
+
+        # initialize the server actor
+        global actor_server
+        global_logger.debug("starting server actor")
+        actor_server = Server.start()
 
         # initialize the firebase actor
         global actor_firebase
