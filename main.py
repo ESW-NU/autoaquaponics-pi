@@ -17,7 +17,7 @@ def shut_down():
     global_logger.info("shutting down")
 
     # clean up actors when program exits
-    global_logger.info("stopping all actors")
+    global_logger.debug("stopping all actors")
     pykka.ActorRegistry.stop_all()
 atexit.register(shut_down)
 
@@ -35,22 +35,22 @@ def main():
 
         # initialize the firebase actor
         global actor_firebase
-        global_logger.info("starting firebase actor")
+        global_logger.debug("starting firebase actor")
         actor_firebase = Firebase.start()
 
         # initialize the notifs actor
         global actor_notifs
-        global_logger.info("starting notifs actor")
+        global_logger.debug("starting notifs actor")
         actor_notifs = Notifs.start(actor_firebase)
 
         # initialize the sensors actor
         global actor_sensors
-        global_logger.info("starting sensors actor")
+        global_logger.debug("starting sensors actor")
         actor_sensors = Sensors.start(actor_firebase)
 
         # initialize the stream
         global actor_stream
-        global_logger.info("starting stream actor")
+        global_logger.debug("starting stream actor")
         actor_stream = Stream.start()
         actor_stream.tell("start")
 

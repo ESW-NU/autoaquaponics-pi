@@ -56,7 +56,7 @@ class Stream(pykka.ThreadingActor):
         self.stream_logger.info(f"starting stream encoding with command: {' '.join(self.ffmpeg_command)}")
         self.ffmpeg_process = subprocess.Popen(self.ffmpeg_command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         for line in self.ffmpeg_process.stderr:
-            self.stream_logger.info(line.decode("utf-8").strip())
+            self.stream_logger.debug(line.decode("utf-8").strip())
 
     def stream_stop(self):
         if self.ffmpeg_process is None:

@@ -86,7 +86,7 @@ class Sensors(pykka.ThreadingActor):
         self.logger.info("Getting 10 initial readings for stabilization")
         for i in range(10):
             data = self.hardware.get_data()
-            self.logger.info(f"Initial reading #{i}: {data}")
+            self.logger.debug(f"Initial reading #{i}: {data}")
             time.sleep(1)
 
         self.logger.info("Starting sensor loop")
@@ -118,7 +118,7 @@ class Sensors(pykka.ThreadingActor):
     def collect_and_send_data(self):
         # get and send data
         data = self.hardware.get_data()
-        self.logger.info(f"Logging data: {data}")
+        self.logger.debug(f"Logging data: {data}")
         self.actor_firebase.tell(AddSensorData(data))
 
     def collect_and_send_data_repeated(self):
