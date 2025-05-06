@@ -140,4 +140,5 @@ class Sensors(pykka.ThreadingActor):
             self.next_log_time = curr_time + self.logging_interval
         wait_time = self.next_log_time - curr_time
         self.logger.debug(f"Next log time: {self.next_log_time} in {wait_time} seconds")
-        self.timer_thread = threading.Timer(wait_time, self.collect_and_send_data_repeated).start()
+        self.timer_thread = threading.Timer(wait_time, self.collect_and_send_data_repeated)
+        self.timer_thread.start()
