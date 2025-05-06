@@ -64,20 +64,23 @@ async def handle_websocket(request):
     try:
         while True:
             try:
+                # check for any messages from client (including close) without blocking
+                try:
+                    msg = await asyncio.wait_for(ws.receive(), timeout=0.001)
+                    if msg.type == web.WSMsgType.CLOSE:
+                        server_logger.debug("Client requested close")
+                        break
+                    elif msg.type == web.WSMsgType.ERROR:
+                        server_logger.debug(f"WebSocket error: {ws.exception()}")
+                        break
+                except asyncio.TimeoutError:
+                    # no message from client, continue with sending
+                    pass
+
+                # Send the image
                 jpeg_img = draw_pattern()
                 await ws.send_bytes(jpeg_img.tobytes())
-
                 await asyncio.sleep(0.033)
-
-            except ConnectionResetError:
-                server_logger.debug("Client disconnected (connection reset)")
-                break
-            except asyncio.TimeoutError:
-                server_logger.debug("Client disconnected (timeout)")
-                break
-            except web.WebSocketError as e:
-                server_logger.debug(f"WebSocket error: {str(e)}")
-                break
             except Exception as e:
                 server_logger.error(f"Error streaming image: {str(e)}")
                 break
