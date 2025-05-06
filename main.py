@@ -21,6 +21,7 @@ actor_server = None
 actor_firebase = None
 actor_notifs = None
 actor_stream = None
+actor_sensors = None
 
 def main():
     try:

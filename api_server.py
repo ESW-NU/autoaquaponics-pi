@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import time
 from logs import register_logger
+from sensors import CollectAndSendData, Sensors
 
 server_logger = register_logger("logs/api_server.log", "API Server")
 
@@ -23,6 +24,12 @@ async def request_logger(request, handler):
 async def handle_root(request):
     # redirect to the autoaquaponics.org website
     return aiohttp.web.HTTPFound('https://autoaquaponics.org')
+
+@routes.get('/api/measure_now')
+async def handle_measure_now(request):
+    actor_sensors = pykka.ActorRegistry.get_by_class(Sensors)[0]
+    actor_sensors.tell(CollectAndSendData())
+    return web.json_response({'message': 'Measuring now!'})
 
 def draw_pattern():
     img = np.full((480, 640, 3), 255, dtype=np.uint8)
