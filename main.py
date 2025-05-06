@@ -7,7 +7,6 @@ import sys
 
 from firebase import Firebase
 from notifs import Notifs
-from stream import Stream
 from sensors import Sensors
 from api_server import Server
 
