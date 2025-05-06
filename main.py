@@ -8,6 +8,7 @@ from dummy import Dummy
 from firebase import Firebase
 from notifs import Notifs
 from stream import Stream
+from sensors import Sensors
 
 """
 Main script for AutoAquaponics system.
@@ -42,6 +43,11 @@ def main():
         global actor_notifs
         global_logger.info("starting notifs actor")
         actor_notifs = Notifs.start(actor_firebase)
+
+        # initialize the sensors actor
+        global actor_sensors
+        global_logger.info("starting sensors actor")
+        actor_sensors = Sensors.start(actor_firebase)
 
         # initialize the stream
         global actor_stream

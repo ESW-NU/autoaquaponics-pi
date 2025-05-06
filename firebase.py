@@ -5,6 +5,7 @@ import pykka
 from logs import register_logger
 from dataclasses import dataclass
 from typing import Any
+from sensors_data import SensorData
 
 firebase_logger = register_logger("logs/firebase.log", "Firebase")
 
@@ -30,9 +31,9 @@ class UnsubscribeFromStats:
     actor_ref: pykka.ActorRef
 
 @dataclass
-class AddTestData:
-    """Message to add test data to Firebase."""
-    pass
+class AddSensorData:
+    """Message to add sensor data to Firebase."""
+    data: SensorData
 
 @dataclass
 class StatsUpdate:
@@ -77,9 +78,9 @@ class Firebase(pykka.ThreadingActor):
             self.firebase_logger.debug("Unsubscribing from stats")
             self.stats_listeners.discard(message.actor_ref)
             return True
-        elif isinstance(message, AddTestData):
-            self.firebase_logger.debug("Adding test data")
-            return self.add_test_data()
+        elif isinstance(message, AddSensorData):
+            self.firebase_logger.debug("Adding sensor data")
+            return self.add_sensor_data(message.data)
 
         self.firebase_logger.warning(f"Received unknown message type: {type(message)}")
 
@@ -137,18 +138,8 @@ class Firebase(pykka.ThreadingActor):
         self.firebase_logger.debug(f"Notification recipients: {recipients}")
         return recipients
 
-    def add_test_data(self):
-        """Add test data to Firestore to simulate out-of-range readings."""
-        import time
-        test_data = {
-            "TDS": 1000,  # Assuming this is out of range
-            "air_temp": 35,  # Assuming this is out of range
-            "distance": 50,
-            "humidity": 80,
-            "pH": 7,
-            "water_temp": 25,
-            "unix_time": int(time.time())
-        }
-        self.db.collection('stats').add(test_data)
-        self.firebase_logger.info(f"Added test data: {test_data}")
-        return True
+    def add_sensor_data(self, data: SensorData):
+        """Add sensor data to Firestore."""
+        data_dict = data.__dict__
+        self.db.collection('stats').add(data_dict)
+        self.firebase_logger.info(f"Added sensor data: {data_dict}")
