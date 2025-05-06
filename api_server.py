@@ -8,7 +8,6 @@ import numpy as np
 import time
 from logs import register_logger
 from sensors import CollectAndSendData, Sensors
-
 server_logger = register_logger("logs/api_server.log", "API Server")
 
 routes = web.RouteTableDef()
@@ -27,9 +26,14 @@ async def handle_root(request):
 
 @routes.get('/api/measure_now')
 async def handle_measure_now(request):
-    actor_sensors = pykka.ActorRegistry.get_by_class(Sensors)[0]
-    actor_sensors.tell(CollectAndSendData())
-    return web.json_response({'message': 'Measuring now!'})
+    lst = pykka.ActorRegistry.get_by_class(Sensors)
+    actor_sensors = lst[0] if lst else None
+
+    if actor_sensors:
+        actor_sensors.tell(CollectAndSendData())
+        return web.json_response({'message': 'Measuring now!'})
+    else:
+        return web.json_response({'message': 'No sensors actor found'}, status=500)
 
 def draw_pattern():
     img = np.full((480, 640, 3), 255, dtype=np.uint8)

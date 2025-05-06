@@ -8,7 +8,7 @@ import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
-from firebase import AddSensorData
+from firebase import AddSensorData, Firebase
 from sensors_data import SensorData
 from dataclasses import dataclass
 
@@ -72,13 +72,16 @@ class TriggerSensorLoop:
     """Message to trigger the sensor loop."""
     logging_interval: int
 
+def get_actor_firebase():
+    """Get the first firebase actor."""
+    lst = pykka.ActorRegistry.get_by_class(Firebase)
+    return lst[0] if lst else None
+
 class Sensors(pykka.ThreadingActor):
-    def __init__(self, actor_firebase, sensor_logger=sensor_logger):
+    def __init__(self, sensor_logger=sensor_logger):
         super().__init__()
 
         self.logger = sensor_logger
-
-        self.actor_firebase = actor_firebase
 
         # initialize latest sensor values
         self.pH = np.nan
@@ -150,7 +153,10 @@ class Sensors(pykka.ThreadingActor):
         # get and send data
         data = self.hardware.measure_all()
         self.logger.debug(f"Logging data: {data}")
-        self.actor_firebase.tell(AddSensorData(data))
+        if actor_firebase := get_actor_firebase():
+            actor_firebase.tell(AddSensorData(data))
+        else:
+            self.logger.warning("Couldn't send data: no firebase actor found")
 
     def measure_and_send_data_repeated(self):
         if self.timer_thread is not None:

@@ -11,46 +11,57 @@ from sensors import Sensors
 from api_server import Server
 
 """
-Main script for AutoAquaponics system.
+Main script for AutoAquaponics system. This script starts all the actors and
+keeps them running.
+
+Each actor represents a subsystem. For example, there is an "API server" actor
+that handles incoming HTTP requests (and livestream), and a "sensors" actor that
+reads from the sensors, and a "firebase" actor that manages interactions with
+the cloud. The actors can independently crash without taking down the entire
+program.
+
+To access an actor, you can either pass the actor reference directly in a
+message if you need that specific actor, or if you just need the subsystem, you
+can use the global pykka actor registry:
+
+`lst = pykka.ActorRegistry.get_by_class(SubsystemClassName)`
+
+It is recommended to do the lookup every time you need the actor just in case
+it has crashed and respawned since the last lookup.
+
+Remember to check if the list is empty if you want to handle a case where an
+actor has crashed.
 """
 
 # load environment variables from .env file
 dotenv.load_dotenv()
-
-actor_server = None
-actor_firebase = None
-actor_notifs = None
-actor_stream = None
-actor_sensors = None
 
 def main():
     try:
         global_logger.info("Hello World!")
 
         # initialize the server actor
-        global actor_server
         global_logger.debug("starting server actor")
-        actor_server = Server.start()
+        Server.start()
 
         # initialize the firebase actor
-        global actor_firebase
         global_logger.debug("starting firebase actor")
-        actor_firebase = Firebase.start()
+        Firebase.start()
 
         # initialize the notifs actor
-        global actor_notifs
         global_logger.debug("starting notifs actor")
-        actor_notifs = Notifs.start(actor_firebase)
+        Notifs.start()
 
         # initialize the sensors actor
-        global actor_sensors
         global_logger.debug("starting sensors actor")
-        actor_sensors = Sensors.start(actor_firebase)
+        Sensors.start()
 
         # keep alive forever
         while True:
             global_logger.debug("staying alive")
             time.sleep(60*60)
+
+            # TODO check if any subsystems have crashed and restart them
     except KeyboardInterrupt:
         global_logger.info("shutting down due to keyboard interrupt")
     except Exception as e:
