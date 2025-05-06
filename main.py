@@ -3,6 +3,7 @@ import time
 import atexit
 import pykka
 import dotenv
+import sys
 
 from firebase import Firebase
 from notifs import Notifs
@@ -14,14 +15,6 @@ from server import Server
 Main script for AutoAquaponics system.
 """
 
-def shut_down():
-    global_logger.info("shutting down")
-
-    # clean up actors when program exits
-    global_logger.debug("stopping all actors")
-    pykka.ActorRegistry.stop_all()
-atexit.register(shut_down)
-
 # load environment variables from .env file
 dotenv.load_dotenv()
 
@@ -32,7 +25,7 @@ actor_stream = None
 
 def main():
     try:
-        global_logger.info("starting main script")
+        global_logger.info("Hello World!")
 
         # initialize the server actor
         global actor_server
@@ -63,8 +56,15 @@ def main():
         # keep alive forever
         while True:
             time.sleep(1)
+    except KeyboardInterrupt:
+        global_logger.info("shutting down due to keyboard interrupt")
     except Exception as e:
         global_logger.error(f"error in main: {str(e)}", exc_info=True)
+
+    # clean up actors when program exits
+    global_logger.debug("stopping all actors")
+    pykka.ActorRegistry.stop_all()
+    global_logger.info("Goodbye!")
 
 if __name__ == "__main__":
     main()
