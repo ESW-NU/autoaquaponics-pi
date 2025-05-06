@@ -51,7 +51,7 @@ class SensorsHardware:
         return SensorData(
             unix_time=round(time.time()),
             pH=get_ph(self.adc_ph),
-            flow_rate=get_flow(self.gpio, self.flow_pin)
+            flow=get_flow(self.gpio, self.flow_pin)
         )
 
 @dataclass

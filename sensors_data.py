@@ -7,5 +7,5 @@ class SensorData:
     """Data from all sensors."""
     unix_time: int
     pH: float
-    flow_rate: float
+    flow: float
 
