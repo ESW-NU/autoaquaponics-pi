@@ -4,7 +4,6 @@ import atexit
 import pykka
 import dotenv
 
-from dummy import Dummy
 from firebase import Firebase
 from notifs import Notifs
 from stream import Stream
