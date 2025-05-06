@@ -3,6 +3,9 @@ from aiohttp import web
 import asyncio
 import pykka
 import threading
+import cv2
+import numpy as np
+import time
 from logs import register_logger
 
 server_logger = register_logger("logs/api_server.log", "API Server")
@@ -17,9 +20,74 @@ async def request_logger(request, handler):
     return response
 
 @routes.get('/')
-async def handle(request):
+async def handle_root(request):
     # redirect to the autoaquaponics.org website
     return aiohttp.web.HTTPFound('https://autoaquaponics.org')
+
+def draw_pattern():
+    img = np.full((480, 640, 3), 255, dtype=np.uint8)
+
+    # Create an interesting pattern that changes over time
+    t = time.time()
+
+    # Make a copy of base image
+    pattern_img = img.copy()
+
+    # Draw animated sine wave pattern
+    for x in range(0, 640, 5):
+        y = int(240 + 100 * np.sin(x/50 + t))
+        cv2.circle(pattern_img, (x, y), 3, (0, 127, 255), -1)
+
+    # Draw animated circular pattern
+    center_x = 320 + int(50 * np.cos(t))
+    center_y = 240 + int(50 * np.sin(t))
+    radius = int(100 + 20 * np.sin(2*t))
+    cv2.circle(pattern_img, (center_x, center_y), radius, (255, 0, 127), 2)
+
+    # Add some text
+    cv2.putText(pattern_img, 'AutoAquaponics', (20, 50),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 0), 2)
+
+    # Encode image to JPEG
+    success, jpeg_img = cv2.imencode('.jpg', pattern_img)
+    if not success:
+        raise Exception("Failed to encode JPEG")
+    return jpeg_img
+
+
+@routes.get('/stream')
+async def handle_websocket(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    server_logger.debug("Websocket connection opened")
+
+    try:
+        while True:
+            try:
+                jpeg_img = draw_pattern()
+                await ws.send_bytes(jpeg_img.tobytes())
+
+                await asyncio.sleep(0.033)
+
+            except ConnectionResetError:
+                server_logger.debug("Client disconnected (connection reset)")
+                break
+            except asyncio.TimeoutError:
+                server_logger.debug("Client disconnected (timeout)")
+                break
+            except web.WebSocketError as e:
+                server_logger.debug(f"WebSocket error: {str(e)}")
+                break
+            except Exception as e:
+                server_logger.error(f"Error streaming image: {str(e)}")
+                break
+    finally:
+        if not ws.closed:
+            await ws.close()
+        server_logger.debug("Websocket connection closed")
+
+    return ws
+
 
 def make_server_runner():
     app = web.Application()
