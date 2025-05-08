@@ -14,6 +14,12 @@ from dataclasses import dataclass
 
 sensor_logger = register_logger("logs/sensors.log", "Sensors")
 
+# Functions for measuring the sensors.
+#
+# The parameters to these functions are objects representing the raw hardware
+# resources. These functions then perform the device-specific operations
+# required to take a measurement and return a meaningful value.
+
 def measure_ph(ph_adc):
     """Get pH reading."""
     neutral_voltage = 1.5  # the voltage when the pH is 7
@@ -31,6 +37,13 @@ def measure_flow(gpio, flow_pin, t_sec=5):
     return flow
 
 class SensorsHardware:
+    """
+    This class encapsulates all hardware resources involved with taking sensor
+    measurements. When constructed, this class initializes those hardware
+    resources. Methods on this class then use the relevant resources to take
+    measurements, delegating to other functions to actually perform the
+    device-specific operations.
+    """
     def __init__(self):
         # initialize GPIO
         self.flow_pin = 16
@@ -56,6 +69,10 @@ class SensorsHardware:
     def measure_flow(self):
         return measure_flow(self.gpio, self.flow_pin)
 
+# Data type definitions for messages for the sensors actor. Sending messages of
+# these types to the actor will cause it to perform certain actions.
+# See main.py for more information on the actor system.
+
 @dataclass
 class StabilizeMeasurements:
     """Message to trigger making multiple measurements immediately to stabilize
@@ -78,6 +95,12 @@ def get_actor_firebase():
     return lst[0] if lst else None
 
 class Sensors(pykka.ThreadingActor):
+    """
+    This actor is responsible for all business related to the sensors. As part
+    of its responsibilities, it takes periodic measurements from the sensors
+    using a SensorsHardware object and sends them to the firebase actor.
+    """
+
     def __init__(self, sensor_logger=sensor_logger):
         super().__init__()
 
@@ -87,11 +110,13 @@ class Sensors(pykka.ThreadingActor):
         self.pH = np.nan
         self.flow = np.nan
 
-        self.logging_interval = None
-        self.last_log_time = None
-        self.next_log_time = None
+        # variables for measurement intervals
+        self.measurement_interval = None
+        self.last_measure_time = None
+        self.next_measurement_time = None
         self.timer_thread = None
 
+        # a SensorsHardware object for actually performing the measurements
         self.hardware = None
 
     def on_start(self):
@@ -101,6 +126,7 @@ class Sensors(pykka.ThreadingActor):
             self.logger.info("Initializing sensors hardware")
             self.hardware = SensorsHardware()
 
+            # send messages to self to start the measurement loop
             self.actor_ref.tell(StabilizeMeasurements())
             self.actor_ref.tell(TriggerSensorLoop(logging_interval=15 * 60))
         except Exception as e:
@@ -113,9 +139,9 @@ class Sensors(pykka.ThreadingActor):
 
         if isinstance(message, TriggerSensorLoop):
             self.logger.info("Starting sensor loop")
-            self.last_log_time = round(time.time())
-            self.next_log_time = self.last_log_time
-            self.logging_interval = message.logging_interval
+            self.last_measure_time = round(time.time())
+            self.next_measurement_time = self.last_measure_time
+            self.measurement_interval = message.logging_interval
             threading.Thread(target=self.measure_and_send_data_repeated).start()
             return
 
@@ -143,6 +169,9 @@ class Sensors(pykka.ThreadingActor):
     # custom methods
 
     def stabilize_measurements(self):
+        """
+        Take 10 initial pH readings for stabilization.
+        """
         self.logger.info("Measuring 10 initial pH readings for stabilization")
         for i in range(10):
             data = self.hardware.measure_ph()
@@ -150,7 +179,9 @@ class Sensors(pykka.ThreadingActor):
             time.sleep(1)
 
     def measure_and_send_data(self):
-        # get and send data
+        """
+        Get and send data.
+        """
         data = self.hardware.measure_all()
         self.logger.debug(f"Logging data: {data}")
         if actor_firebase := get_actor_firebase():
@@ -159,18 +190,26 @@ class Sensors(pykka.ThreadingActor):
             self.logger.warning("Couldn't send data: no firebase actor found")
 
     def measure_and_send_data_repeated(self):
+        """
+        Call *once* to start the measurement loop. Do not call in a loop! After
+        this function takes a measurement, it will schedule itself to be called
+        again in the future.
+        """
+
+        # cancel any existing timer to make sure there is only one measurement
+        # loop
         if self.timer_thread is not None:
             self.timer_thread.cancel()
 
         self.measure_and_send_data()
 
-        # schedule the next log time
+        # schedule the next measurement time
         curr_time = round(time.time())
-        self.last_log_time = self.next_log_time
-        self.next_log_time = self.last_log_time + self.logging_interval
-        if self.next_log_time <= curr_time:
-            self.next_log_time = curr_time + self.logging_interval
-        wait_time = self.next_log_time - curr_time
-        self.logger.debug(f"Next log time: {self.next_log_time} in {wait_time} seconds")
+        self.last_measure_time = self.next_measurement_time
+        self.next_measurement_time = self.last_measure_time + self.measurement_interval
+        if self.next_measurement_time <= curr_time:
+            self.next_measurement_time = curr_time + self.measurement_interval
+        wait_time = self.next_measurement_time - curr_time
+        self.logger.debug(f"Next log time: {self.next_measurement_time} in {wait_time} seconds")
         self.timer_thread = threading.Timer(wait_time, self.measure_and_send_data_repeated)
         self.timer_thread.start()

@@ -31,6 +31,10 @@ it has crashed and respawned since the last lookup.
 
 Remember to check if the list is empty if you want to handle a case where an
 actor has crashed.
+
+Once you have a reference to an actor, you can send messages to it in order to
+request that it perform certain actions or return certain data. See pykka
+documentation (pykka.readthedocs.io) for more information.
 """
 
 # load environment variables from .env file
