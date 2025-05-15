@@ -8,6 +8,7 @@ import board
 import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
+import adafruit_dht
 from firebase import AddSensorData, Firebase
 from sensors_data import SensorData
 from dataclasses import dataclass
@@ -56,11 +57,18 @@ class SensorsHardware:
         self.ads.gain = 2/3
         self.adc_ph = AnalogIn(self.ads, ADS.P2)
 
+        # initialize DHT
+        self.dht = adafruit_dht.DHT22(board.D27, use_pulseio=False)
+
     def measure_all(self) -> SensorData:
+        temperature, humidity = self.measure_dht()
+
         return SensorData(
             unix_time=round(time.time()),
             pH=self.measure_ph(),
-            flow=self.measure_flow()
+            flow=self.measure_flow(),
+            air_temp=temperature,
+            humidity=humidity
         )
 
     def measure_ph(self):
@@ -68,6 +76,27 @@ class SensorsHardware:
 
     def measure_flow(self):
         return measure_flow(self.gpio, self.flow_pin)
+
+    def measure_dht(self):
+        def is_nan(x):  #used in DHT function
+            return (x is np.nan or x != x)
+        temperature_c = np.nan
+        humidity = np.nan
+        while is_nan(temperature_c) or is_nan(humidity):  #test to see if the value is still nan
+            try:
+                temperature_c = self.dht.temperature
+                humidity = self.dht.humidity
+            except RuntimeError as error:
+                sensor_logger.error(error.args[0])
+                # Errors happen fairly often, DHT's are hard to read. Sets to NaN to restart the function.
+                temperature_c = float('NaN')
+                humidity = float('NaN')
+            except Exception as error:
+                # If unexpected error, release resources used by the sensor and notifies caller
+                # self.dht.exit()
+                sensor_logger.error(error)
+                raise error
+        return temperature_c, humidity
 
 # Data type definitions for messages for the sensors actor. Sending messages of
 # these types to the actor will cause it to perform certain actions.

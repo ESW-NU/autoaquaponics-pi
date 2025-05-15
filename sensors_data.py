@@ -8,4 +8,6 @@ class SensorData:
     unix_time: int
     pH: float
     flow: float
+    air_temp: float
+    humidity: float
 
