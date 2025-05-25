@@ -19,6 +19,9 @@ def _check_tolerances(sensor_data, tolerances):
             tolerance_data = tolerances[field]
             min_val = tolerance_data.get('min')
             max_val = tolerance_data.get('max')
+            if value is None:
+                notifs_logger.warning(f"no value found for {field}")
+                continue
             if min_val is not None and max_val is not None:
                 if value < min_val or value > max_val:
                     alerts.append(f"{field} is out of range: {value} (safe range: {min_val}-{max_val})")
