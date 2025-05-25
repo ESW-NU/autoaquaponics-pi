@@ -56,6 +56,7 @@ class SensorsHardware:
         self.ads = ADS.ADS1115(self.i2c)
         self.ads.gain = 2/3
         self.adc_ph = AnalogIn(self.ads, ADS.P2)
+        self.raw_tds = AnalogIn(self.ads, ADS.P0)
 
         # initialize DHT
         self.dht = adafruit_dht.DHT22(board.D27, use_pulseio=False)
@@ -68,7 +69,8 @@ class SensorsHardware:
             pH=self.measure_ph(),
             flow=self.measure_flow(),
             air_temp=temperature,
-            humidity=humidity
+            humidity=humidity,
+            TDS = self.get_tds(),
         )
 
     def measure_ph(self):
@@ -97,7 +99,17 @@ class SensorsHardware:
                 sensor_logger.error(error)
                 raise error
         return temperature_c, humidity
-
+    def get_tds(self, wtemp=25):
+        Vtds_raw = self.raw_tds.voltage        #raw reading from sensor right now
+        TheoEC = 684                    #theoretical EC (electrical conductivity) of calibration fluid (calibrated with 342 ppm of aqueous NaCl)
+        Vc = 1.085751885                #voltage reading of sensor when calibrating
+        temp_calibrate = 23.25          #measured water temp when calibrating
+        rawECsol = TheoEC*(1+0.02*(temp_calibrate-25))  #temp compensate the calibrated values
+        K = (rawECsol)/(133.42*(Vc**3)-255.86*(Vc**2)+857.39*Vc)  #defined calibration factor K for NaCl (this will have to be readjusted for specific solution in tank)
+        EC_raw = K*(133.42*(Vtds_raw**3)-255.86*(Vtds_raw**2)+857.39*Vtds_raw)
+        EC = EC_raw/(1+0.02*(wtemp-25)) #use current temp for temp compensation
+        TDS = EC/2                      #TDS is just half of electrical conductivity in ppm
+        return TDS
 # Data type definitions for messages for the sensors actor. Sending messages of
 # these types to the actor will cause it to perform certain actions.
 # See main.py for more information on the actor system.

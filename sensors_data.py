@@ -10,4 +10,5 @@ class SensorData:
     flow: float
     air_temp: float
     humidity: float
+    TDS: float
 
