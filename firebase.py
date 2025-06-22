@@ -52,11 +52,16 @@ class Firebase(pykka.ThreadingActor):
         try:
             self.firebase_logger.info("Initializing Firebase")
 
-            service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
-            if not service_account_path:
-                raise ValueError("FIREBASE_SERVICE_ACCOUNT_KEY_PATH environment variable not set")
-            cred = credentials.Certificate(service_account_path)
-            firebase_admin.initialize_app(cred)
+            try:
+                firebase_admin.get_app()
+                self.firebase_logger.info("Firebase already initialized, using existing app instance")
+            except ValueError:
+                self.firebase_logger.info("Firebase not initialized, initializing new app instance")
+                service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_PATH')
+                if not service_account_path:
+                    raise ValueError("FIREBASE_SERVICE_ACCOUNT_KEY_PATH environment variable not set")
+                cred = credentials.Certificate(service_account_path)
+                firebase_admin.initialize_app(cred)
 
             self.db = firestore.client()
             self._setup_stats_listener()
