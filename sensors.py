@@ -23,8 +23,8 @@ sensor_logger = register_logger("logs/sensors.log", "Sensors")
 
 def measure_ph(ph_adc):
     """Get pH reading."""
-    neutral_voltage = 1.5  # the voltage when the pH is 7
-    inverse_slope = -0.1765  # volts per pH unit
+    neutral_voltage = 1.38102  # the voltage when the pH is 7
+    inverse_slope = -0.161711  # volts per pH unit
     return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
 
 def measure_flow(gpio, flow_pin, t_sec=5):
