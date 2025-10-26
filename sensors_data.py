@@ -11,4 +11,5 @@ class SensorData:
     air_temp: float
     humidity: float
     TDS: float
+    dissolved_oxygen: float
 
