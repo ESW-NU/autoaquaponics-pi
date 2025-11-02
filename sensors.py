@@ -32,13 +32,13 @@ def measure_do(do_adc):
             11260, 11010, 10770, 10530, 10300, 10080, 9860, 9660, 9460, 9270,
             9080, 8900, 8730, 8570, 8410, 8250, 8110, 7960, 7820, 7690,
             7560, 7430, 7300, 7180, 7070, 6950, 6840, 6730, 6630, 6530, 6410]
-    v_cal = 0.81 # voltage when fully saturated
-    v_temp = 23.4 # temperature in C for above measurement
+    v_cal = 0.3774 # voltage when fully saturated
+    v_temp = 27.4 # temperature in C for above measurement
     v_saturation = v_cal + 35 * v_temp - v_temp * 35
 
     # current water temperature in C. this should be obtained
     # from a sensor but we don't have that yet so use a dummy value
-    wtemp_c = 25.6
+    wtemp_c = 25.8
 
     mg_per_liter = do_adc.voltage * do_table[int(wtemp_c)] / v_saturation / 1000
     return mg_per_liter
