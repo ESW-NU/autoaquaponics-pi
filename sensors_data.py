@@ -12,4 +12,5 @@ class SensorData:
     humidity: float
     TDS: float
     dissolved_oxygen: float
+    water_temp: float
 
