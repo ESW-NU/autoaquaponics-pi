@@ -9,6 +9,8 @@ import busio
 import adafruit_ads1x15.ads1115 as ADS
 from adafruit_ads1x15.analog_in import AnalogIn
 import adafruit_dht
+from adafruit_onewire.bus import OneWireBus
+from adafruit_ds18x20 import DS18X20
 from firebase import AddSensorData, Firebase
 from sensors_data import SensorData
 from dataclasses import dataclass
@@ -27,20 +29,34 @@ def measure_ph(ph_adc):
     inverse_slope = -0.161711  # volts per pH unit
     return (ph_adc.voltage - neutral_voltage) / inverse_slope + 7.0
 
-def measure_do(do_adc):
+def measure_water_temp(ds18b20_sensor):
+    """Get water temperature reading in Celsius. (directly from sensor)"""
+    return ds18b20_sensor.temperature
+
+def measure_do(do_adc, wtemp_c):
     do_table = [14460, 14220, 13820, 13440, 13090, 12740, 12420, 12110, 11810, 11530,
             11260, 11010, 10770, 10530, 10300, 10080, 9860, 9660, 9460, 9270,
             9080, 8900, 8730, 8570, 8410, 8250, 8110, 7960, 7820, 7690,
             7560, 7430, 7300, 7180, 7070, 6950, 6840, 6730, 6630, 6530, 6410]
     v_cal = 0.3774 # voltage when fully saturated
-    v_temp = 27.4 # temperature in C for above measurement
+    v_temp = 27.4 # temperature in C for above measurement (from calibration, do not change)
     v_saturation = v_cal + 35 * v_temp - v_temp * 35
 
     # current water temperature in C. this should be obtained
     # from a sensor but we don't have that yet so use a dummy value
-    wtemp_c = 25.8
+    # wtemp_c = 25.8
+    # We have the sensor being integrated. Incase it doesn't work, this will stay here.
+    if wtemp_c is None or np.isnan(wtemp_c): #this makes a default of 25 Celcius is something goes wrong with the temp sensor
+            wtemp_c=25.8
 
-    mg_per_liter = do_adc.voltage * do_table[int(wtemp_c)] / v_saturation / 1000
+    # If there is a temperature reading that is outside of the do_table that we have, this should handle it. 
+    idx = int(wtemp_c)
+    if idx < 0:
+        idx = 0
+    elif idx >= len(do_table):
+        idx = len(do_table) - 1
+
+    mg_per_liter = do_adc.voltage * do_table[idx] / v_saturation / 1000
     return mg_per_liter
 
 def measure_flow(gpio, flow_pin, t_sec=5):
@@ -78,8 +94,23 @@ class SensorsHardware:
         # initialize DHT
         self.dht = adafruit_dht.DHT22(board.D27, use_pulseio=False)
 
+        # initialize DS18B20 water temp sensor
+        try:
+            self.ow_bus = OneWireBus(board.D4)
+            scan_results = self.ow_bus.scan()
+            if scan_results:
+                self.ds18b20 = DS18X20(self.ow_bus, scan_results[0])
+            else:
+                sensor_logger.warning("No 1-Wire hardware units found at pin D4.")
+                self.ds18b20 = None
+        except Exception as error:
+            sensor_logger.error(f"Failed initialization on 1-Wire hardware system: {error}")
+            self.ds18b20 = None
+
     def measure_all(self) -> SensorData:
+        # Not sure why these are made differently, but I followed this formatting when integrating water_temp.
         temperature, humidity = self.measure_dht()
+        water_temp = self.measure_water_temp()
 
         return SensorData(
             unix_time=round(time.time()),
@@ -87,8 +118,9 @@ class SensorsHardware:
             flow=self.measure_flow(),
             air_temp=temperature,
             humidity=humidity,
-            TDS = self.get_tds(),
-            dissolved_oxygen = self.measure_do(),
+            TDS = self.get_tds(water_temp),
+            dissolved_oxygen = self.measure_do(water_temp),
+            water_temp = water_temp,
         )
 
     def measure_ph(self):
@@ -97,8 +129,11 @@ class SensorsHardware:
     def measure_flow(self):
         return measure_flow(self.gpio, self.flow_pin)
 
-    def measure_do(self):
-        return measure_do(self.adc_do)
+    def measure_water_temp(self):
+        return measure_water_temp(self.ds18b20)
+
+    def measure_do(self, wtemp_c=25.8):
+        return measure_do(self.adc_do, wtemp_c)
 
     def measure_dht(self):
         def is_nan(x):  #used in DHT function
@@ -220,8 +255,8 @@ class Sensors(pykka.ThreadingActor):
     def on_stop(self):
         """Clean up hardware resources."""
         self.logger.info("Stopping sensors")
-        if self.gpio:
-            GPIO.gpiochip_close(self.gpio)
+        if self.hardware and hasattr(self.hardware, 'gpio') and self.hardware.gpio:
+            GPIO.gpiochip_close(self.hardware.gpio)
 
     def on_failure(self, failure):
         """Handle actor failures."""
